@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../axiosConfig'; // Import the configured Axios instance
 import { motion } from 'framer-motion';
 
 export default function StudentAssessment() {
@@ -26,14 +26,7 @@ export default function StudentAssessment() {
         }
 
         console.log('Fetching assessment for:', { courseId, assessmentId }); // Debug
-        const response = await axios.get(
-          `https://lms-backend-flwq.onrender.com/api/v1/students/courses/${courseId}/assessments/${assessmentId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await api.get(`/students/courses/${courseId}/assessments/${assessmentId}`);
         console.log('Assessment response:', response.data); // Debug
         if (response.data.success) {
           setAssessment(response.data.data);
@@ -92,14 +85,9 @@ export default function StudentAssessment() {
       }
 
       console.log('Submitting answers:', answers); // Debug
-      const response = await axios.post(
-        `https://lms-backend-flwq.onrender.com/api/v1/students/courses/${courseId}/assessments/${assessmentId}/submit`,
-        { answers },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const response = await api.post(
+        `/students/courses/${courseId}/assessments/${assessmentId}/submit`,
+        { answers }
       );
       console.log('Submission response:', response.data); // Debug
       if (response.data.success) {

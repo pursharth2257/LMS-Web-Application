@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../axiosConfig';
 import { motion } from 'framer-motion';
-import DefaultImageCourse from '../../assets/DefaultImageCourse.webp'; 
-const DEFAULT_AVATAR = 'https://res.cloudinary.com/dcgilmdbm/image/upload/v1747893719/default_avatar_xpw8jv.jpg';
+import DefaultImageCourse from '../../assets/DefaultImageCourse.webp';
 import {
   FaStar,
   FaRegClock,
@@ -21,16 +20,42 @@ import {
   FaQuestionCircle,
   FaCode,
   FaArrowLeft,
-  FaShoppingCart
+  FaShoppingCart,
 } from 'react-icons/fa';
 
+// Constants
+const DEFAULT_AVATAR = 'https://res.cloudinary.com/dcgilmdbm/image/upload/v1747893719/default_avatar_xpw8jv.jpg';
+const RAZORPAY_KEY_ID = 'rzp_test_wEHfns4O1eHdMO';
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'curriculum', label: 'Curriculum' },
+  { id: 'instructor', label: 'Instructor' },
+  { id: 'reviews', label: 'Reviews' },
+];
+const ERROR_MESSAGES = {
+  INVALID_ID: 'Invalid course ID format',
+  NO_TOKEN: 'Please log in to view course details',
+  SESSION_EXPIRED: 'Session expired. Please log in again.',
+  FETCH_COURSE: 'Error fetching course details',
+  FETCH_REVIEWS: 'Error fetching reviews',
+  NO_TOKEN_ENROLL: 'You must be logged in to enroll.',
+  RAZORPAY_NOT_CONFIGURED: 'Razorpay Key ID is not configured',
+  RAZORPAY_LOAD_FAILED: 'Failed to load Razorpay payment gateway',
+  ENROLL_FAILED: 'Enrollment failed',
+  PAYMENT_FAILED: 'Payment verification failed',
+  ALREADY_ENROLLED: 'You are already enrolled in this course!',
+};
+const LESSON_ICONS = {
+  video: FaPlayCircle,
+  quiz: FaQuestionCircle,
+  project: FaCode,
+};
+
 // Modal Component for Success/Error Feedback
-const Modal = ({ isOpen, message, type, onClose }) => {
+const Modal = memo(({ isOpen, message, type, onClose }) => {
   useEffect(() => {
     if (isOpen) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, 3000);
+      const timer = setTimeout(() => onClose(), 3000);
       return () => clearTimeout(timer);
     }
   }, [isOpen, onClose]);
@@ -62,13 +87,9 @@ const Modal = ({ isOpen, message, type, onClose }) => {
       </div>
     </div>
   );
-};
+});
 
-// Hardcoded values to avoid process.env
-const API_BASE_URL = 'https://new-lms-backend-vmgr.onrender.com/api/v1';
-const REVIEWS_API_BASE_URL = 'https://lms-backend-flwq.onrender.com/api/v1';
-const RAZORPAY_KEY_ID = 'rzp_test_wEHfns4O1eHdMO';
-
+// Component
 const ViewCourse = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -86,7 +107,7 @@ const ViewCourse = () => {
   const [isEnrolled, setIsEnrolled] = useState(false);
 
   // Load Razorpay script
-  const loadRazorpayScript = () => {
+  const loadRazorpayScript = useCallback(() => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -95,18 +116,52 @@ const ViewCourse = () => {
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
-  };
+  }, []);
 
-  // Scroll to top when component mounts or when course ID changes
+  // Scroll to top
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [id]);
 
-  // Fetch course data and enrollment status from API
+  // Check enrollment status
+  const checkEnrollmentStatus = useCallback(async (token, headers) => {
+    try {
+      const response = await api.get('/students/courses');
+      console.log('Enrollment response:', response.data);
+      if (response.data.success) {
+        const enrolledCourses = response.data.data || response.data.courses || [];
+        const enrolled = enrolledCourses.some((course) => {
+          console.log('Checking course:', course);
+          return (
+            course._id === id ||
+            course.courseId === id ||
+            course.id === id ||
+            (course.course && course.course._id === id) ||
+            (course.course && course.course.id === id)
+          );
+        });
+        setIsEnrolled(enrolled);
+        console.log('Is Enrolled:', enrolled);
+        return enrolled;
+      } else {
+        console.warn('Enrollment check failed:', response.data.message);
+        setEnrollError('Failed to check enrollment status: ' + response.data.message);
+        setTimeout(() => setEnrollError(null), 3000);
+        return false;
+      }
+    } catch (err) {
+      console.error('Enrollment check error:', err.response?.data || err);
+      setEnrollError('Failed to check enrollment status');
+      setTimeout(() => setEnrollError(null), 3000);
+      return false;
+    }
+  }, [id]);
+
+  // Fetch course data
   useEffect(() => {
     const fetchCourse = async () => {
       if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-        setError('Invalid course ID format');
+        setError(ERROR_MESSAGES.INVALID_ID);
         setLoading(false);
         return;
       }
@@ -114,20 +169,13 @@ const ViewCourse = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('Token');
-        console.log('Token:', token);
-        console.log('Course ID:', id);
         if (!token) {
-          setError('Please log in to view course details');
+          setError(ERROR_MESSAGES.NO_TOKEN);
           setTimeout(() => navigate('/'), 2000);
           return;
         }
-        const headers = { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        };
 
-        // Fetch course details
-        const response = await axios.get(`${API_BASE_URL}/courses/${id}`, { headers });
+        const response = await api.get(`/courses/${id}`);
         console.log('Course details response:', response.data);
 
         if (response.data.success) {
@@ -146,14 +194,12 @@ const ViewCourse = () => {
             duration: `${courseData.duration} hours`,
             level: courseData.level.charAt(0).toUpperCase() + courseData.level.slice(1),
             category: courseData.category.toLowerCase(),
-           price: courseData.discountPrice && courseData.price !== 0 
-  ? `₹${courseData.price - courseData.discountPrice}` 
-  : courseData.price === 0 
-    ? 'Free' 
-    : `₹${courseData.price}`,
-originalPrice: courseData.discountPrice && courseData.price !== 0 
-  ? `₹${courseData.price}` 
-  : null,
+            price: courseData.discountPrice && courseData.price !== 0
+              ? `₹${courseData.price - courseData.discountPrice}`
+              : courseData.price === 0
+                ? 'Free'
+                : `₹${courseData.price}`,
+            originalPrice: courseData.discountPrice && courseData.price !== 0 ? `₹${courseData.price}` : null,
             image: courseData.thumbnail,
             thumbnail: courseData.thumbnail || DefaultImageCourse,
             videoUrl: courseData.videoUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ',
@@ -168,67 +214,38 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
             learningOutcomes: courseData.learningOutcomes || [
               'Master key concepts and skills',
               'Apply knowledge to real-world projects',
-              'Gain industry-relevant expertise'
+              'Gain industry-relevant expertise',
             ],
             requirements: courseData.requirements || [
               'Basic computer skills',
               'Internet access',
-              'Willingness to learn'
+              'Willingness to learn',
             ],
             features: courseData.features || [
               { icon: FaRegClock, text: `${courseData.duration} hours of on-demand video` },
               { icon: FaDownload, text: 'Downloadable resources' },
               { icon: FaGlobe, text: 'Access on mobile and desktop' },
               { icon: FaCertificate, text: 'Certificate of completion' },
-              { icon: FaUsers, text: 'Access to student community' }
-            ]
+              { icon: FaUsers, text: 'Access to student community' },
+            ],
           };
           console.log('Thumbnail URL:', courseData.thumbnail);
           console.log('Course pricing:', {
             price: courseData.price,
             discountPrice: courseData.discountPrice,
             transformedPrice: transformedCourse.price,
-            transformedOriginalPrice: transformedCourse.originalPrice
+            transformedOriginalPrice: transformedCourse.originalPrice,
           });
           setCourse(transformedCourse);
-
-          // Check enrollment status
-          try {
-            const enrollmentResponse = await axios.get(`${API_BASE_URL}/students/courses`, { headers });
-            console.log('Enrollment response:', enrollmentResponse.data);
-            console.log('Enrolled courses:', enrollmentResponse.data.data);
-            if (enrollmentResponse.data.success) {
-              const enrolledCourses = enrollmentResponse.data.data || enrollmentResponse.data.courses || [];
-              const enrolled = enrolledCourses.some(course => {
-                console.log('Checking course:', course);
-                return (
-                  course._id === id ||
-                  course.courseId === id ||
-                  course.id === id ||
-                  (course.course && course.course._id === id) ||
-                  (course.course && course.course.id === id)
-                );
-              });
-              setIsEnrolled(enrolled);
-              console.log('Is Enrolled:', enrolled);
-            } else {
-              console.warn('Enrollment check failed:', enrollmentResponse.data.message);
-              setEnrollError('Failed to check enrollment status: ' + enrollmentResponse.data.message);
-              setTimeout(() => setEnrollError(null), 3000);
-            }
-          } catch (enrollErr) {
-            console.error('Enrollment check error:', enrollErr.response?.data || enrollErr);
-            setEnrollError('Failed to check enrollment status');
-            setTimeout(() => setEnrollError(null), 3000);
-          }
+          await checkEnrollmentStatus(token);
         } else {
-          throw new Error(response.data.message || 'Failed to fetch course details');
+          throw new Error(response.data.message || ERROR_MESSAGES.FETCH_COURSE);
         }
       } catch (err) {
         console.error('Fetch Course Error:', err.response?.data || err);
-        let errorMessage = err.response?.data?.message || 'Error fetching course details';
+        let errorMessage = err.response?.data?.message || ERROR_MESSAGES.FETCH_COURSE;
         if (err.response?.status === 401) {
-          errorMessage = 'Session expired. Please log in again.';
+          errorMessage = ERROR_MESSAGES.SESSION_EXPIRED;
           localStorage.removeItem('Token');
           localStorage.removeItem('user');
           setTimeout(() => navigate('/'), 2000);
@@ -241,9 +258,9 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
     };
 
     fetchCourse();
-  }, [id, navigate]);
+  }, [id, navigate, checkEnrollmentStatus]);
 
-  // Fetch reviews data when reviews tab is active
+  // Fetch reviews data
   useEffect(() => {
     if (activeTab === 'reviews') {
       const fetchReviews = async () => {
@@ -252,20 +269,19 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
           setReviewsError(null);
           const token = localStorage.getItem('Token');
           if (!token) {
-            setReviewsError('Please log in to view reviews');
+            setReviewsError(ERROR_MESSAGES.NO_TOKEN);
             return;
           }
-          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-          const response = await axios.get(`${REVIEWS_API_BASE_URL}/courses/${id}/reviews`, { headers });
+          const response = await api.get(`/courses/${id}/reviews`);
           console.log('Reviews response:', response.data);
           if (response.data.success) {
             setReviews(response.data.data);
           } else {
-            throw new Error(response.data.message || 'Failed to fetch reviews');
+            throw new Error(response.data.message || ERROR_MESSAGES.FETCH_REVIEWS);
           }
         } catch (err) {
           console.error('Fetch Reviews Error:', err.response?.data || err);
-          setReviewsError(err.response?.data?.message || 'Error fetching reviews');
+          setReviewsError(err.response?.data?.message || ERROR_MESSAGES.FETCH_REVIEWS);
         } finally {
           setReviewsLoading(false);
         }
@@ -274,11 +290,12 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
     }
   }, [activeTab, id]);
 
-  const toggleModule = (moduleId) => {
-    setExpandedModule(expandedModule === moduleId ? null : moduleId);
-  };
+  // Handlers
+  const toggleModule = useCallback((moduleId) => {
+    setExpandedModule((prev) => (prev === moduleId ? null : moduleId));
+  }, []);
 
-  const handleShare = () => {
+  const handleShare = useCallback(() => {
     if (navigator.share) {
       navigator.share({
         title: course?.title || 'Course',
@@ -290,84 +307,57 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
       setEnrollSuccess('Course link copied to clipboard!');
       setTimeout(() => setEnrollSuccess(null), 3000);
     }
-  };
+  }, [course]);
 
-  const handleEnrollNow = async () => {
+  const handleEnrollNow = useCallback(async () => {
     if (isEnrolled) {
-      setEnrollSuccess('You are already enrolled in this course!');
+      setEnrollSuccess(ERROR_MESSAGES.ALREADY_ENROLLED);
       setTimeout(() => setEnrollSuccess(null), 3000);
       return;
     }
 
     if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-      setEnrollError('Invalid course ID format');
+      setEnrollError(ERROR_MESSAGES.INVALID_ID);
       return;
     }
 
     const token = localStorage.getItem('Token');
     if (!token) {
-      setEnrollError('You must be logged in to enroll.');
+      setEnrollError(ERROR_MESSAGES.NO_TOKEN_ENROLL);
       setTimeout(() => navigate('/'), 2000);
       return;
     }
 
     try {
-      console.log('Checking enrollment before proceeding:', id);
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const enrollmentResponse = await axios.get(`${API_BASE_URL}/students/courses`, { headers });
-      console.log('Pre-enrollment check response:', enrollmentResponse.data);
-      console.log('Enrolled courses in pre-check:', enrollmentResponse.data.data);
-      if (enrollmentResponse.data.success) {
-        const enrolledCourses = enrollmentResponse.data.data || enrollmentResponse.data.courses || [];
-        const enrolled = enrolledCourses.some(course => {
-          console.log('Checking course in pre-check:', course);
-          return (
-            course._id === id ||
-            course.courseId === id ||
-            course.id === id ||
-            (course.course && course.course._id === id) ||
-            (course.course && course.course.id === id)
-          );
-        });
-        if (enrolled) {
-          setIsEnrolled(true);
-          setEnrollSuccess('You are already enrolled in this course!');
-          setTimeout(() => setEnrollSuccess(null), 3000);
-          return;
-        }
-      } else {
-        console.warn('Pre-enrollment check failed:', enrollmentResponse.data.message);
+      setEnrollLoading(true);
+      setEnrollError(null);
+      setEnrollSuccess(null);
+
+      const enrolled = await checkEnrollmentStatus(token);
+      if (enrolled) {
+        setIsEnrolled(true);
+        setEnrollSuccess(ERROR_MESSAGES.ALREADY_ENROLLED);
+        setTimeout(() => setEnrollSuccess(null), 3000);
+        return;
       }
-    } catch (enrollErr) {
-      console.error('Pre-enrollment check error:', enrollErr.response?.data || enrollErr);
-    }
 
-    if (!RAZORPAY_KEY_ID) {
-      setEnrollError('Razorpay Key ID is not configured');
-      setEnrollLoading(false);
-      return;
-    }
+      if (!RAZORPAY_KEY_ID) {
+        setEnrollError(ERROR_MESSAGES.RAZORPAY_NOT_CONFIGURED);
+        setEnrollLoading(false);
+        return;
+      }
 
-    setEnrollLoading(true);
-    setEnrollError(null);
-    setEnrollSuccess(null);
-
-    try {
       if (course.price === 'Free') {
         console.log('Enrolling in free course with ID:', id);
-        const enrollResponse = await axios.post(
-          `${API_BASE_URL}/students/courses`,
-          { courseId: id, paymentId: null },
-          { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-        );
+        const enrollResponse = await api.post('/students/courses', { courseId: id, paymentId: null });
         console.log('Enroll response:', enrollResponse.data);
 
         if (enrollResponse.data.success) {
           setEnrollSuccess('You have been enrolled successfully!');
           setIsEnrolled(true);
-          setTimeout(() => navigate('/profile-dashboard'), 2000);
+          setTimeout(() => navigate('/'), 2000);
         } else {
-          setEnrollError(enrollResponse.data.message || 'Enrollment failed');
+          setEnrollError(enrollResponse.data.message || ERROR_MESSAGES.ENROLL_FAILED);
         }
         setEnrollLoading(false);
         return;
@@ -375,27 +365,23 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
-        setEnrollError('Failed to load Razorpay payment gateway');
+        setEnrollError(ERROR_MESSAGES.RAZORPAY_LOAD_FAILED);
         setEnrollLoading(false);
         return;
       }
 
       console.log('Creating order for course with ID:', id);
-      const orderResponse = await axios.post(
-        `${API_BASE_URL}/payments/create-order`,
-        { courseId: id },
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-      );
+      const orderResponse = await api.post('/payments/create-order', { courseId: id });
       console.log('Order response:', orderResponse.data);
 
       if (!orderResponse.data.success) {
         console.error('Order creation failed:', orderResponse.data);
         if (orderResponse.data.message === 'Already enrolled in this course') {
           setIsEnrolled(true);
-          setEnrollSuccess('You are already enrolled in this course!');
+          setEnrollSuccess(ERROR_MESSAGES.ALREADY_ENROLLED);
           setTimeout(() => setEnrollSuccess(null), 3000);
         } else {
-          setEnrollError(orderResponse.data.message || 'Failed to create payment order');
+          setEnrollError(orderResponse.data.message || ERROR_MESSAGES.ENROLL_FAILED);
         }
         setEnrollLoading(false);
         return;
@@ -414,46 +400,37 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
         handler: async function (response) {
           console.log('Razorpay payment response:', response);
           try {
-            const verifyResponse = await axios.post(
-              `${API_BASE_URL}/payments/verify`,
-              {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                paymentId
-              },
-              { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-            );
+            const verifyResponse = await api.post('/payments/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              paymentId,
+            });
             console.log('Verify response:', verifyResponse.data);
 
             if (!verifyResponse.data.success) {
-              setEnrollError(verifyResponse.data.message || 'Payment verification failed');
+              setEnrollError(verifyResponse.data.message || ERROR_MESSAGES.PAYMENT_FAILED);
               setEnrollLoading(false);
               return;
             }
 
             console.log('Enrolling with paymentId:', verifyResponse.data.data.paymentId);
-            const enrollResponse = await axios.post(
-              `${API_BASE_URL}/students/courses`,
-              { courseId: id, paymentId: verifyResponse.data.data.paymentId },
-              { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-            );
+            const enrollResponse = await api.post('/students/courses', {
+              courseId: id,
+              paymentId: verifyResponse.data.data.paymentId,
+            });
             console.log('Enroll response:', enrollResponse.data);
 
             if (enrollResponse.data.success) {
               setEnrollSuccess('You have been enrolled successfully!');
               setIsEnrolled(true);
-              setTimeout(() => navigate('/profile-dashboard'), 2000);
+              setTimeout(() => navigate('/'), 2000);
             } else {
-              setEnrollError(enrollResponse.data.message || 'Enrollment failed');
+              setEnrollError(enrollResponse.data.message || ERROR_MESSAGES.ENROLL_FAILED);
             }
           } catch (error) {
             console.error('Payment verification or enrollment error:', error.response?.data || error);
-            const errorMessage =
-              error.response?.data?.message ||
-              error.message ||
-              'An error occurred during payment verification or enrollment';
-            setEnrollError(errorMessage);
+            setEnrollError(error.response?.data?.message || error.message || ERROR_MESSAGES.PAYMENT_FAILED);
           } finally {
             setEnrollLoading(false);
           }
@@ -461,18 +438,16 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
         prefill: {
           name: localStorage.getItem('user') || 'Student',
           email: localStorage.getItem('userEmail') || 'student@example.com',
-          contact: '9999999999'
+          contact: '9999999999',
         },
-        theme: {
-          color: '#0D9488'
-        },
+        theme: { color: '#0D9488' },
         modal: {
           ondismiss: () => {
             console.log('Razorpay modal dismissed');
             setEnrollError('Payment was cancelled');
             setEnrollLoading(false);
-          }
-        }
+          },
+        },
       };
 
       console.log('Razorpay options:', options);
@@ -485,53 +460,284 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
       razorpay.open();
     } catch (error) {
       console.error('Enroll API error:', error.response?.data || error);
-      const errorMessage =
-        error.response?.data?.message || error.message || 'An error occurred during enrollment';
+      const errorMessage = error.response?.data?.message || error.message || ERROR_MESSAGES.ENROLL_FAILED;
       if (errorMessage === 'Already enrolled in this course') {
         setIsEnrolled(true);
-        setEnrollSuccess('You are already enrolled in this course!');
+        setEnrollSuccess(ERROR_MESSAGES.ALREADY_ENROLLED);
         setTimeout(() => setEnrollSuccess(null), 3000);
       } else {
         setEnrollError(errorMessage);
       }
       setEnrollLoading(false);
     }
-  };
+  }, [id, navigate, course, isEnrolled, checkEnrollmentStatus, loadRazorpayScript]);
 
   // Validate thumbnail URL
-  const isValidThumbnailUrl = (url) => {
+  const isValidThumbnailUrl = useCallback((url) => {
     if (!url) return false;
-    return /^https?:\/\/.*$/i.test(url);
-  };
+    return /^https?:\/\/[^\s/$.?#].[^\s]*$/i.test(url);
+  }, []);
 
-  const getLessonIcon = (type) => {
-    switch (type) {
-      case 'video':
-        return <FaPlayCircle className="text-teal-600" />;
-      case 'quiz':
-        return <FaQuestionCircle className="text-blue-600" />;
-      case 'project':
-        return <FaCode className="text-purple-600" />;
-      default:
-        return <FaPlayCircle className="text-teal-600" />;
-    }
-  };
+  // Get lesson icon
+  const getLessonIcon = useCallback((type) => {
+    const Icon = LESSON_ICONS[type] || FaPlayCircle;
+    return <Icon className={`text-${type === 'video' ? 'teal' : type === 'quiz' ? 'blue' : 'purple'}-600`} />;
+  }, []);
 
-  // Format date for display
-  const formatDate = (dateString) => {
+  // Format date
+  const formatDate = useCallback((dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-  };
+  }, []);
 
-  const closeModal = () => {
+  // Close modal
+  const closeModal = useCallback(() => {
     setEnrollSuccess(null);
     setEnrollError(null);
     setReviewsError(null);
-  };
+  }, []);
 
+  // Tab Content Component
+  const TabContent = useMemo(() => {
+    if (activeTab === 'overview') {
+      return (
+        <div className="space-y-8">
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">About this course</h3>
+            <p className="text-gray-700 leading-relaxed mb-6">{course.longDescription}</p>
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">What you'll learn</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {course.learningOutcomes.map((outcome, index) => (
+                <div key={index} className="flex items-start">
+                  <FaCheck className="text-teal-600 mr-3 mt-1 flex-shrink-0" />
+                  <span className="text-gray-700">{outcome}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h3>
+            <ul className="space-y-2">
+              {course.requirements.map((requirement, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full mr-3 mt-2 flex-shrink-0"></span>
+                  <span className="text-gray-700">{requirement}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'curriculum') {
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-gray-900">Course curriculum</h3>
+            <div className="text-sm text-gray-600">
+              {course.modules.length} sections • {course.modules.reduce((total, module) => total + module.lessons.length, 0)} lessons • {course.duration}
+            </div>
+          </div>
+          <div className="space-y-4">
+            {course.modules.map((module, moduleIndex) => (
+              <div key={module.id} className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                <button
+                  onClick={() => toggleModule(module.id)}
+                  className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mr-4 font-bold text-sm">
+                      {moduleIndex + 1}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-lg">{module.title}</h4>
+                      <p className="text-sm text-gray-600">{module.lessons.length} lessons • {module.duration}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                      {module.lessons.filter((l) => l.preview).length} preview{module.lessons.filter((l) => l.preview).length !== 1 ? 's' : ''}
+                    </span>
+                    {expandedModule === module.id ? (
+                      <FaChevronUp className="text-gray-400" />
+                    ) : (
+                      <FaChevronDown className="text-gray-400" />
+                    )}
+                  </div>
+                </button>
+                {expandedModule === module.id && (
+                  <div className="border-t border-gray-200 bg-gray-50">
+                    {module.lessons.map((lesson) => (
+                      <div key={lesson.id} className="flex items-center justify-between p-4 border-b border-gray-100 last:border-b-0 hover:bg-white transition-colors">
+                        <div className="flex items-center flex-1">
+                          <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-4 shadow-sm">
+                            {getLessonIcon(lesson.type)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <p className="font-medium text-gray-900">{lesson.title}</p>
+                              {lesson.preview && (
+                                <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">
+                                  FREE
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-4 mt-1">
+                              <p className="text-sm text-gray-600">{lesson.duration}</p>
+                              <span className="text-xs text-gray-500 capitalize">{lesson.type}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          {lesson.preview ? (
+                            <button className="text-teal-600 text-sm font-medium hover:text-teal-700 flex items-center">
+                              <FaPlayCircle className="mr-1 text-xs" />
+                              Preview
+                            </button>
+                          ) : (
+                            <FaLock className="text-gray-400 text-sm" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'instructor') {
+      return (
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-6">Meet your instructor</h3>
+          <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-6">
+            <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-6">
+              <div className="flex-shrink-0">
+                <img
+                  src={course.instructorAvatar}
+                  alt={course.instructor}
+                  className="w-32 h-32 rounded-full border-4 border-white shadow-lg"
+                  onError={(e) => {
+                    e.target.src = 'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80';
+                    console.error('Instructor avatar load error for URL:', course.instructorAvatar);
+                  }}
+                  loading="lazy"
+                />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-2xl font-bold text-gray-900 mb-2">{course.instructor}</h4>
+                <p className="text-teal-600 font-medium mb-4">Senior Instructor</p>
+                <p className="text-gray-700 leading-relaxed mb-6">{course.instructorBio}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                    <div className="flex items-center justify-center mb-2">
+                      <FaStar className="text-yellow-400 mr-1" />
+                      <span className="font-bold text-lg">{course.rating}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Instructor Rating</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                    <div className="flex items-center justify-center mb-2">
+                      <FaUsers className="text-teal-600 mr-1" />
+                      <span className="font-bold text-lg">{(course.students / 1000).toFixed(0)}K+</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Students Taught</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+                    <div className="flex items-center justify-center mb-2">
+                      <FaCertificate className="text-purple-600 mr-1" />
+                      <span className="font-bold text-lg">15+</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Courses Created</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm">Expert Instructor</span>
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">{course.category} Specialist</span>
+                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">Industry Leader</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'reviews') {
+      return (
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-6">Student reviews</h3>
+          {reviewsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-teal-600"></div>
+            </div>
+          ) : reviewsError ? (
+            <div className="bg-red-100 rounded-lg p-6 text-center">
+              <p className="text-red-600">{reviewsError}</p>
+            </div>
+          ) : reviews.length === 0 ? (
+            <div className="bg-gray-100 rounded-lg p-6 text-center">
+              <p className="text-gray-600">No reviews yet for this course.</p>
+              <p className="text-sm text-gray-500 mt-2">Be the first to leave a review after completing the course!</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {reviews.map((review) => (
+                <div
+                  key={review._id}
+                  className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start space-x-4">
+                    <img
+                      src={review.user.avatar}
+                      alt={`${review.user.firstName} ${review.user.lastName}`}
+                      className="w-12 h-12 rounded-full border-2 border-gray-200"
+                      onError={(e) => {
+                        e.target.src = DEFAULT_AVATAR;
+                        console.error('User avatar load error for URL:', review.user.avatar);
+                      }}
+                      loading="lazy"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900">{`${review.user.firstName} ${review.user.lastName}`}</p>
+                          <div className="flex items-center mt-1">
+                            {[...Array(5)].map((_, index) => (
+                              <FaStar
+                                key={index}
+                                className={index < review.rating ? 'text-yellow-400' : 'text-gray-300'}
+                              />
+                            ))}
+                            <span className="ml-2 text-sm text-gray-600">{review.rating}/5</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-500">{formatDate(review.createdAt)}</p>
+                      </div>
+                      <p className="mt-3 text-gray-700 leading-relaxed">{review.comment}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  }, [activeTab, course, reviews, reviewsLoading, reviewsError, expandedModule, toggleModule, getLessonIcon, formatDate]);
+
+  // Loading State
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -540,6 +746,7 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
     );
   }
 
+  // Error State
   if (error || !course) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-500">
@@ -574,7 +781,6 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
               transition={{ duration: 0.5 }}
               viewport={{ once: true }}
             >
-              {/* Course Badge */}
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="bg-teal-600 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium">
                   {course.category}
@@ -586,13 +792,9 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
                   Updated {course.lastUpdated}
                 </span>
               </div>
-
-              {/* Course Title and Description */}
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">{course.title}</h1>
                 <p className="text-lg sm:text-xl text-gray-400 mb-4 sm:mb-6">{course.description}</p>
-                
-                {/* Course Stats */}
                 <div className="flex flex-wrap items-center gap-6 text-sm">
                   <div className="flex items-center">
                     <FaStar className="text-yellow-400 mr-1" />
@@ -612,16 +814,12 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
                     <span>{course.level}</span>
                   </div>
                 </div>
-
-                {/* Instructor Info */}
                 <div className="flex items-center mt-6">
                   <div>
                     <p className="text-sm text-black">Created by</p>
                     <p className="font-semibold">{course.instructor}</p>
                   </div>
                 </div>
-
-                {/* Action Buttons */}
                 <div className="flex items-center gap-4 mt-8">
                   <button
                     onClick={handleShare}
@@ -633,7 +831,6 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
                 </div>
               </div>
             </motion.div>
-
             {/* Right Content - Course Preview */}
             <motion.div
               className="lg:col-span-1"
@@ -643,31 +840,29 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
               viewport={{ once: true }}
             >
               <div className="bg-white rounded-lg shadow-lg overflow-hidden sticky top-4">
-                {/* Thumbnail Display */}
-<div className="w-full h-60 relative">
-  {course.thumbnail && isValidThumbnailUrl(course.thumbnail) ? (
-    <img
-      src={course.thumbnail}
-      alt={course.title}
-      className="w-full h-full object-cover"
-      onError={(e) => {
-        e.target.src = DefaultImageCourse;
-        e.target.onerror = null;
-        console.error('Thumbnail load error for URL:', course.thumbnail);
-      }}
-    />
-  ) : (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <img 
-        src={DefaultImageCourse} 
-        alt="Default course thumbnail" 
-        className="w-full h-full object-cover"
-      />
-    </div>
-  )}
-</div>
-
-                {/* Pricing and Enrollment */}
+                <div className="w-full h-60 relative">
+                  {course.thumbnail && isValidThumbnailUrl(course.thumbnail) ? (
+                    <img
+                      src={course.thumbnail}
+                      alt={course.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = DefaultImageCourse;
+                        e.target.onerror = null;
+                        console.error('Thumbnail load error for URL:', course.thumbnail);
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                      <img
+                        src={DefaultImageCourse}
+                        alt="Default course thumbnail"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
                 <div className="p-5">
                   <div className="text-center mb-5">
                     <div className="flex items-center justify-center gap-3 mb-2">
@@ -679,14 +874,15 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
                     {course.originalPrice && course.price !== 'Free' && (
                       <div className="flex items-center justify-center gap-2 mb-2">
                         <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
-                          {Math.round(((parseFloat(course.originalPrice.replace('₹', '')) - parseFloat(course.price.replace('₹', ''))) / parseFloat(course.originalPrice.replace('₹', ''))) * 100)}% OFF
+                          {Math.round(
+                            ((parseFloat(course.originalPrice.replace('₹', '')) - parseFloat(course.price.replace('₹', ''))) /
+                              parseFloat(course.originalPrice.replace('₹', ''))) * 100
+                          )}% OFF
                         </span>
                         <span className="text-sm text-gray-600">Limited time offer!</span>
                       </div>
                     )}
-                    <div className="text-xs text-gray-500">
-                      ⏰ Offer ends in 2 days
-                    </div>
+                    <div className="text-xs text-gray-500">⏰ Offer ends in 2 days</div>
                   </div>
                   <ul className="text-xs text-gray-700 space-y-2 mb-4">
                     <li>✔ Full lifetime access</li>
@@ -719,7 +915,6 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
           </div>
         </div>
       </section>
-
       {/* Course Content */}
       <section className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -732,15 +927,9 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
               transition={{ duration: 0.5 }}
               viewport={{ once: true }}
             >
-              {/* Tab Navigation */}
               <div className="border-b border-gray-200 mb-8">
                 <nav className="flex space-x-8">
-                  {[
-                    { id: 'overview', label: 'Overview' },
-                    { id: 'curriculum', label: 'Curriculum' },
-                    { id: 'instructor', label: 'Instructor' },
-                    { id: 'reviews', label: 'Reviews' }
-                  ].map((tab) => (
+                  {TABS.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
@@ -755,231 +944,8 @@ originalPrice: courseData.discountPrice && courseData.price !== 0
                   ))}
                 </nav>
               </div>
-
-              {/* Tab Content */}
-              {activeTab === 'overview' && (
-                <div className="space-y-8">
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">About this course</h3>
-                    <p className="text-gray-700 leading-relaxed mb-6">{course.longDescription}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">What you'll learn</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {course.learningOutcomes.map((outcome, index) => (
-                        <div key={index} className="flex items-start">
-                          <FaCheck className="text-teal-600 mr-3 mt-1 flex-shrink-0" />
-                          <span className="text-gray-700">{outcome}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h3>
-                    <ul className="space-y-2">
-                      {course.requirements.map((requirement, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="w-2 h-2 bg-gray-400 rounded-full mr-3 mt-2 flex-shrink-0"></span>
-                          <span className="text-gray-700">{requirement}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'curriculum' && (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-gray-900">Course curriculum</h3>
-                    <div className="text-sm text-gray-600">
-                      {course.modules.length} sections • {course.modules.reduce((total, module) => total + module.lessons.length, 0)} lessons • {course.duration}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {course.modules.map((module, moduleIndex) => (
-                      <div key={module.id} className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                        <button
-                          onClick={() => toggleModule(module.id)}
-                          className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
-                        >
-                          <div className="flex items-center">
-                            <div className="w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mr-4 font-bold text-sm">
-                              {moduleIndex + 1}
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-gray-900 text-lg">{module.title}</h4>
-                              <p className="text-sm text-gray-600">{module.lessons.length} lessons • {module.duration}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                              {module.lessons.filter(l => l.preview).length} preview{module.lessons.filter(l => l.preview).length !== 1 ? 's' : ''}
-                            </span>
-                            {expandedModule === module.id ? (
-                              <FaChevronUp className="text-gray-400" />
-                            ) : (
-                              <FaChevronDown className="text-gray-400" />
-                            )}
-                          </div>
-                        </button>
-                        {expandedModule === module.id && (
-                          <div className="border-t border-gray-200 bg-gray-50">
-                            {module.lessons.map((lesson) => (
-                              <div key={lesson.id} className="flex items-center justify-between p-4 border-b border-gray-100 last:border-b-0 hover:bg-white transition-colors">
-                                <div className="flex items-center flex-1">
-                                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-4 shadow-sm">
-                                    {getLessonIcon(lesson.type)}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center space-x-2">
-                                      <p className="font-medium text-gray-900">{lesson.title}</p>
-                                      {lesson.preview && (
-                                        <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">
-                                          FREE
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center space-x-4 mt-1">
-                                      <p className="text-sm text-gray-600">{lesson.duration}</p>
-                                      <span className="text-xs text-gray-500 capitalize">{lesson.type}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-3">
-                                  {lesson.preview ? (
-                                    <button className="text-teal-600 text-sm font-medium hover:text-teal-700 flex items-center">
-                                      <FaPlayCircle className="mr-1 text-xs" />
-                                      Preview
-                                    </button>
-                                  ) : (
-                                    <FaLock className="text-gray-400 text-sm" />
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'instructor' && (
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Meet your instructor</h3>
-                  <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-6">
-                    <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-6">
-                      <div className="flex-shrink-0">
-                        <img
-                          src={course.instructorAvatar}
-                          alt={course.instructor}
-                          className="w-32 h-32 rounded-full border-4 border-white shadow-lg"
-                          onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80';
-                            console.error('Instructor avatar load error for URL:', course.instructorAvatar);
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="text-2xl font-bold text-gray-900 mb-2">{course.instructor}</h4>
-                        <p className="text-teal-600 font-medium mb-4">Senior Instructor</p>
-                        <p className="text-gray-700 leading-relaxed mb-6">{course.instructorBio}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                          <div className="bg-white rounded-lg p-4 text-center shadow-sm">
-                            <div className="flex items-center justify-center mb-2">
-                              <FaStar className="text-yellow-400 mr-1" />
-                              <span className="font-bold text-lg">{course.rating}</span>
-                            </div>
-                            <p className="text-sm text-gray-600">Instructor Rating</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-4 text-center shadow-sm">
-                            <div className="flex items-center justify-center mb-2">
-                              <FaUsers className="text-teal-600 mr-1" />
-                              <span className="font-bold text-lg">{(course.students / 1000).toFixed(0)}K+</span>
-                            </div>
-                            <p className="text-sm text-gray-600">Students Taught</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-4 text-center shadow-sm">
-                            <div className="flex items-center justify-center mb-2">
-                              <FaCertificate className="text-purple-600 mr-1" />
-                              <span className="font-bold text-lg">15+</span>
-                            </div>
-                            <p className="text-sm text-gray-600">Courses Created</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm">Expert Instructor</span>
-                          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">{course.category} Specialist</span>
-                          <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">Industry Leader</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'reviews' && (
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Student reviews</h3>
-                  {reviewsLoading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-teal-600"></div>
-                    </div>
-                  ) : reviewsError ? (
-                    <div className="bg-red-100 rounded-lg p-6 text-center">
-                      <p className="text-red-600">{reviewsError}</p>
-                    </div>
-                  ) : reviews.length === 0 ? (
-                    <div className="bg-gray-100 rounded-lg p-6 text-center">
-                      <p className="text-gray-600">No reviews yet for this course.</p>
-                      <p className="text-sm text-gray-500 mt-2">Be the first to leave a review after completing the course!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {reviews.map((review) => (
-                        <div
-                          key={review._id}
-                          className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-start space-x-4">
-                            <img
-                              src={review.user.avatar}
-                              alt={`${review.user.firstName} ${review.user.lastName}`}
-                              className="w-12 h-12 rounded-full border-2 border-gray-200"
-                              onError={(e) => {
-                                e.target.src = 'https://res.cloudinary.com/dcgilmdbm/image/upload/v1747893719/default_avatar_xpw8jv.jpg';
-                                console.error('User avatar load error for URL:', review.user.avatar);
-                              }}
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-semibold text-gray-900">{`${review.user.firstName} ${review.user.lastName}`}</p>
-                                  <div className="flex items-center mt-1">
-                                    {[...Array(5)].map((_, index) => (
-                                      <FaStar
-                                        key={index}
-                                        className={index < review.rating ? 'text-yellow-400' : 'text-gray-300'}
-                                      />
-                                    ))}
-                                    <span className="ml-2 text-sm text-gray-600">{review.rating}/5</span>
-                                  </div>
-                                </div>
-                                <p className="text-sm text-gray-500">{formatDate(review.createdAt)}</p>
-                              </div>
-                              <p className="mt-3 text-gray-700 leading-relaxed">{review.comment}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {TabContent}
             </motion.div>
-
             {/* Sidebar */}
             <motion.div
               className="lg:col-span-1 space-y-6"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../axiosConfig'; // Import axios instance
 import { motion } from 'framer-motion';
 import { FaStar, FaArrowLeft } from 'react-icons/fa';
 
@@ -44,9 +44,6 @@ const Modal = ({ isOpen, message, type, onClose }) => {
   );
 };
 
-// Hardcoded API base URL
-const REVIEWS_API_BASE_URL = 'https://lms-backend-flwq.onrender.com/api/v1';
-
 const AllReviews = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -71,8 +68,7 @@ const AllReviews = () => {
           setTimeout(() => navigate('/'), 2000);
           return;
         }
-        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-        const response = await axios.get(`${REVIEWS_API_BASE_URL}/courses/${id}/reviews`, { headers });
+        const response = await api.get(`/courses/${id}/reviews`);
         console.log('Reviews response:', response.data);
         if (response.data.success) {
           setReviews(response.data.data);

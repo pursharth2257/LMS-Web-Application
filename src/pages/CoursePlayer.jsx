@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronDown, HelpCircle, Star, Bell, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import api from '../../axiosConfig';
 import arrowLeft from '../assets/image (1).png';
 import { ThemeContext } from '../pages/Profiledashboard/ThemeContext';
 
@@ -64,31 +64,17 @@ export default function CoursePlayer() {
           throw new Error('No authentication token found');
         }
 
-        console.log('Fetching data for courseId:', courseId); // Debug courseId
-        console.log('Using token:', token); // Debug token
+        console.log('Fetching data for courseId:', courseId);
+        console.log('Using token:', token);
 
         const [contentRes, enrollmentRes, coursesRes, assessmentsRes, profileRes, notificationsRes, liveClassesRes] = await Promise.all([
-          axios.get(`https://lms-backend-flwq.onrender.com/api/v1/courses/${courseId}/content`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch((err) => ({ data: { success: false }, error: err })),
-          axios.get('https://lms-backend-flwq.onrender.com/api/v1/students/courses', {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get('https://lms-backend-flwq.onrender.com/api/v1/courses', {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`https://lms-backend-flwq.onrender.com/api/v1/students/courses/${courseId}/assessments`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get('https://lms-backend-flwq.onrender.com/api/v1/students/profile', {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`https://new-lms-backend-vmgr.onrender.com/api/v1/notifications/course/${courseId}?page=1&limit=10&isRead=false`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch((err) => ({ data: { success: false }, error: err })),
-          axios.get(`https://new-lms-backend-vmgr.onrender.com/api/v1/live-classes/course/${courseId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch((err) => {
+          api.get(`/courses/${courseId}/content`).catch((err) => ({ data: { success: false }, error: err })),
+          api.get('/students/courses'),
+          api.get('/courses'),
+          api.get(`/students/courses/${courseId}/assessments`),
+          api.get('/students/profile'),
+          api.get(`/notifications/course/${courseId}?page=1&limit=10&isRead=false`).catch((err) => ({ data: { success: false }, error: err })),
+          api.get(`/live-classes/course/${courseId}`).catch((err) => {
             console.error('Live Classes API Error:', err.response?.data || err.message);
             return { data: { success: false }, error: err };
           }),
@@ -181,7 +167,7 @@ export default function CoursePlayer() {
         }
 
         if (liveClassesRes.data.success) {
-          console.log('Live Classes fetched:', liveClassesRes.data.data); // Debug live classes
+          console.log('Live Classes fetched:', liveClassesRes.data.data);
           setLiveClasses(liveClassesRes.data.data);
         } else {
           const errorMessage = liveClassesRes.error?.response?.data?.message || liveClassesRes.error?.message || 'Failed to load live classes.';
@@ -258,13 +244,7 @@ export default function CoursePlayer() {
         return;
       }
 
-      const response = await axios.put(
-        'https://new-lms-backend-vmgr.onrender.com/api/v1/notifications/mark-all-read',
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await api.put('/notifications/mark-all-read', {});
 
       if (response.data.success) {
         setNotifications([]);
@@ -330,16 +310,10 @@ export default function CoursePlayer() {
         throw new Error('No authentication token found');
       }
 
-      const response = await axios.post(
-        `https://lms-backend-flwq.onrender.com/api/v1/courses/${courseId}/reviews`,
-        {
-          rating: feedback.rating,
-          comment: feedback.comment,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await api.post(`/courses/${courseId}/reviews`, {
+        rating: feedback.rating,
+        comment: feedback.comment,
+      });
 
       if (response.data.success) {
         setFeedbackSuccess('Feedback submitted successfully.');
@@ -365,18 +339,12 @@ export default function CoursePlayer() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await axios.post(
-        'https://lms-backend-flwq.onrender.com/api/v1/students/support',
-        {
-          subject: form.subject,
-          message: form.message,
-          category: 'course',
-          relatedCourse: form.relatedCourse || undefined,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await api.post('/students/support', {
+        subject: form.subject,
+        message: form.message,
+        category: 'course',
+        relatedCourse: form.relatedCourse || undefined,
+      });
 
       if (response.data.success) {
         setSuccessMsg('Support ticket submitted successfully.');

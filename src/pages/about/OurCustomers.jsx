@@ -1,33 +1,212 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+
+// Data for navigation links (shared with OurAffiliation.js)
+const navLinks = [
+  { to: '/about/company', label: 'About Brain Bridge' },
+  { to: '/about/team', label: 'Our Affiliations' },
+  { to: '/about/mission', label: 'Our Customers', active: true },
+  { to: '/about/testimonials', label: 'Placement Partners' },
+  { to: '/reviews/participant', label: 'Participant Reviews' },
+  { to: '/reviews/corporate', label: 'Corporate Training Reviews' },
+  { to: '/reviews/college', label: 'College Training Reviews' },
+  { to: '/reviews/job-support', label: 'Job Support Reviews' },
+  { to: '/courses/all', label: 'All Courses' },
+];
+
+// Data for customer logos
+const customers = [
+  { name: 'Airtel', color: 'teal-600' },
+  { name: 'BSNL', color: 'blue-600' },
+  { name: 'DENSO', color: 'teal-600', italic: true },
+  { name: 'Gillette', color: 'blue-900' },
+  { name: 'HCL', color: 'blue-600' },
+  { name: 'Hero', color: 'teal-600' },
+  { name: 'HITACHI', color: 'teal-600' },
+  { name: 'HP', color: 'blue-600' },
+  { name: 'ITC', color: 'green-600', size: 'text-sm' },
+  { name: 'Jet Airways', color: 'yellow-600', size: 'text-sm' },
+  { name: 'L&T', color: 'blue-600', size: 'text-sm' },
+  { name: 'Maruti', color: 'teal-600', size: 'text-sm' },
+  { name: 'Mindtree', color: 'purple-600', size: 'text-sm' },
+  { name: 'ORA', color: 'orange-600' },
+  { name: 'Parrys', color: 'green-600', size: 'text-sm' },
+  { name: 'Pricol', color: 'blue-600', size: 'text-sm' },
+  { name: 'SAP', color: 'blue-700' },
+  { name: 'Standard', color: 'gray-700', size: 'text-sm' },
+  { name: 'Sun', color: 'orange-600' },
+  { name: 'TATA', color: 'blue-800' },
+  { name: 'Vodafone', color: 'teal-600', size: 'text-sm' },
+  { name: 'Adobe', color: 'teal-600', size: 'text-sm' },
+  { name: 'Aegis', color: 'blue-600', size: 'text-sm' },
+  { name: 'ALSTOM', color: 'green-600', size: 'text-sm' },
+  { name: 'Ameriprise', color: 'blue-600', size: 'text-sm' },
+  { name: 'American', color: 'teal-600', size: 'text-sm' },
+  { name: 'Apollo', color: 'green-600', size: 'text-sm' },
+  { name: 'British Telecom', color: 'blue-600', size: 'text-sm' },
+  { name: 'CSAV', color: 'orange-600', size: 'text-sm' },
+  { name: 'eClerx', color: 'purple-600', size: 'text-sm' },
+  { name: 'Fidelity', color: 'green-600', size: 'text-sm' },
+  { name: 'Flipkart', color: 'orange-600', size: 'text-sm' },
+  { name: 'Flowserve', color: 'blue-600', size: 'text-sm' },
+  { name: 'GoJavas', color: 'orange-600', size: 'text-sm' },
+  { name: 'HDFC Bank', color: 'blue-800', size: 'text-sm' },
+  { name: 'Hewlett Packard', color: 'blue-600', size: 'text-sm' },
+  { name: 'Hind Exide', color: 'teal-600', size: 'text-sm' },
+  { name: 'IndusInd Bank', color: 'orange-600', size: 'text-sm' },
+  { name: 'KVK', color: 'blue-600', size: 'text-sm' },
+  { name: 'BNP Paribas', color: 'green-600', size: 'text-sm' },
+  { name: 'Corporate', color: 'purple-600', size: 'text-sm' },
+  { name: 'TCS', color: 'blue-800' },
+  { name: 'Medium Hotwire', color: 'teal-600', size: 'text-sm' },
+  { name: 'Microsoft', color: 'blue-600', size: 'text-sm' },
+  { name: 'Oceaneering', color: 'orange-600', size: 'text-sm' },
+  { name: 'Olam', color: 'green-600', size: 'text-sm' },
+  { name: 'Perrigo', color: 'blue-600', size: 'text-sm' },
+  { name: 'Pune', color: 'purple-600', size: 'text-sm' },
+  { name: 'Ecolab', color: 'green-600', size: 'text-sm' },
+  { name: 'Independent', color: 'gray-600', size: 'text-sm' },
+  { name: 'Reliance', color: 'blue-800', size: 'text-sm' },
+  { name: 'SASMOS HET', color: 'teal-600', size: 'text-sm' },
+  { name: 'Smart Megh', color: 'blue-600', size: 'text-sm' },
+  { name: 'Snapdeal', color: 'orange-600', size: 'text-sm' },
+  { name: 'Standard Chartered', color: 'blue-600', size: 'text-sm' },
+  { name: 'Stefanini IT', color: 'green-600', size: 'text-sm' },
+  { name: 'Untitled', color: 'gray-600', size: 'text-sm' },
+  { name: 'Wisemen', color: 'purple-600', size: 'text-sm' },
+  { name: 'Xerox Corp', color: 'blue-600', size: 'text-sm' },
+  { name: 'YASH', color: 'teal-600', size: 'text-sm' },
+  { name: 'ABC Consultants', color: 'blue-600', size: 'text-sm' },
+  { name: 'ABP', color: 'teal-600', size: 'text-sm' },
+  { name: 'Aditya Birla', color: 'orange-600', size: 'text-sm' },
+  { name: 'XL CATLIN', color: 'blue-600', size: 'text-sm' },
+  { name: 'ANDSLITE', color: 'gray-600', size: 'text-sm' },
+  { name: 'ANGEL', color: 'teal-600', size: 'text-sm' },
+  { name: 'Association', color: 'purple-600', size: 'text-sm' },
+  { name: 'Atlas Copco', color: 'teal-600', size: 'text-sm' },
+  { name: 'BAJAJ FINANCE', color: 'blue-600', size: 'text-sm' },
+  { name: 'Bakerhill', color: 'green-600', size: 'text-sm' },
+  { name: 'Birla Institute', color: 'orange-600', size: 'text-sm' },
+  { name: 'Boston Scientific', color: 'blue-600', size: 'text-sm' },
+  { name: 'Brand Start', color: 'teal-600', size: 'text-sm' },
+  { name: 'BWR Bharat', color: 'blue-600', size: 'text-sm' },
+  { name: 'Careers 360', color: 'orange-600', size: 'text-sm' },
+  { name: 'ChessMate', color: 'purple-600', size: 'text-sm' },
+  { name: 'CII', color: 'blue-600', size: 'text-sm' },
+  { name: 'Colonel Academy', color: 'green-600', size: 'text-sm' },
+  { name: 'Deloitte', color: 'green-600', size: 'text-sm' },
+  { name: 'DHL', color: 'yellow-600', size: 'text-sm' },
+  { name: 'DREAM', color: 'blue-600', size: 'text-sm' },
+  { name: 'Early Makers', color: 'orange-600', size: 'text-sm' },
+  { name: 'Einfochips', color: 'blue-600', size: 'text-sm' },
+  { name: 'Emerson', color: 'gray-600', size: 'text-sm' },
+  { name: 'Etech Global', color: 'purple-600', size: 'text-sm' },
+  { name: 'EY', color: 'yellow-600', size: 'text-sm' },
+  { name: 'Faurecia', color: 'blue-600', size: 'text-sm' },
+  { name: 'FedEx', color: 'purple-600', size: 'text-sm' },
+  { name: 'Fidelity', color: 'green-600', size: 'text-sm' },
+  { name: 'Fluor', color: 'orange-600', size: 'text-sm' },
+  { name: 'Food Service', color: 'teal-600', size: 'text-sm' },
+  { name: 'Fresenius', color: 'blue-600', size: 'text-sm' },
+  { name: 'GEOTECH', color: 'orange-600', size: 'text-sm' },
+  { name: 'GSK', color: 'blue-600', size: 'text-sm' },
+  { name: 'Granite', color: 'gray-600', size: 'text-sm' },
+  { name: 'Grant Thornton', color: 'teal-600', size: 'text-sm' },
+  { name: 'HDFC BANK', color: 'blue-800', size: 'text-sm' },
+  { name: 'Hindpower', color: 'teal-600', size: 'text-sm' },
+  { name: 'Holostik', color: 'blue-600', size: 'text-sm' },
+  { name: 'HONDA', color: 'teal-600', size: 'text-sm' },
+  { name: 'Howden', color: 'blue-600', size: 'text-sm' },
+  { name: 'IBN', color: 'teal-600', size: 'text-sm' },
+  { name: 'Indus Valley', color: 'purple-600', size: 'text-sm' },
+  { name: 'IPS', color: 'blue-600', size: 'text-sm' },
+  { name: 'Jet Airways', color: 'yellow-600', size: 'text-sm' },
+  { name: 'Jindal Steel', color: 'blue-600', size: 'text-sm' },
+  { name: 'L&T Infotech', color: 'blue-600', size: 'text-sm' },
+  { name: 'Lufthansa', color: 'blue-600', size: 'text-sm' },
+  { name: 'Maersk', color: 'blue-600', size: 'text-sm' },
+  { name: 'MET', color: 'orange-600', size: 'text-sm' },
+  { name: 'Metso', color: 'blue-600', size: 'text-sm' },
+  { name: 'Milton Cycles', color: 'teal-600', size: 'text-sm' },
+  { name: 'Mitsubishi', color: 'teal-600', size: 'text-sm' },
+  { name: 'Mizuho', color: 'blue-600', size: 'text-sm' },
+  { name: 'Modern School', color: 'blue-600', size: 'text-sm' },
+  { name: 'Modi Naturals', color: 'green-600', size: 'text-sm' },
+  { name: 'Morgan Stanley', color: 'blue-600', size: 'text-sm' },
+  { name: 'NAESYS', color: 'purple-600', size: 'text-sm' },
+  { name: 'NCDC', color: 'green-600', size: 'text-sm' },
+  { name: 'Nielsen', color: 'blue-600', size: 'text-sm' },
+  { name: 'NIIT', color: 'teal-600', size: 'text-sm' },
+  { name: 'Nomura', color: 'blue-600', size: 'text-sm' },
+  { name: 'Panasonic', color: 'blue-600', size: 'text-sm' },
+  { name: 'PHILIPS', color: 'blue-600', size: 'text-sm' },
+  { name: 'Porteck', color: 'orange-600', size: 'text-sm' },
+  { name: 'Quantum', color: 'purple-600', size: 'text-sm' },
+  { name: 'Quickbooks', color: 'green-600', size: 'text-sm' },
+  { name: 'R1', color: 'blue-600', size: 'text-sm' },
+  { name: 'Religare', color: 'teal-600', size: 'text-sm' },
+  { name: 'RG GROUP', color: 'blue-600', size: 'text-sm' },
+  { name: 'Ronnie Finance', color: 'orange-600', size: 'text-sm' },
+  { name: 'Rustomjee', color: 'blue-600', size: 'text-sm' },
+  { name: 'SARENS', color: 'yellow-600', size: 'text-sm' },
+  { name: 'Satyam', color: 'blue-600', size: 'text-sm' },
+  { name: 'SHADES', color: 'gray-600', size: 'text-sm' },
+  { name: 'Show Buzz', color: 'purple-600', size: 'text-sm' },
+  { name: 'Software One', color: 'blue-600', size: 'text-sm' },
+  { name: 'TATA POWER', color: 'blue-800', size: 'text-sm' },
+  { name: 'Tech Mahindra', color: 'blue-600', size: 'text-sm' },
+  { name: 'TechProcess', color: 'orange-600', size: 'text-sm' },
+  { name: 'Techprocompsoft', color: 'green-600', size: 'text-sm' },
+  { name: 'George Institute', color: 'blue-600', size: 'text-sm' },
+  { name: 'Thomas Cook', color: 'teal-600', size: 'text-sm' },
+  { name: 'Trent', color: 'blue-600', size: 'text-sm' },
+  { name: 'UK INDIA', color: 'teal-600', size: 'text-sm' },
+  { name: 'Unique Logistics', color: 'blue-600', size: 'text-sm' },
+  { name: 'UT DALLAS', color: 'orange-600', size: 'text-sm' },
+  { name: 'Varun Beverages', color: 'blue-600', size: 'text-sm' },
+  { name: 'VIDEOCON', color: 'teal-600', size: 'text-sm' },
+  { name: 'Vidya', color: 'blue-600', size: 'text-sm' },
+  { name: 'WAPCOS', color: 'blue-600', size: 'text-sm' },
+  { name: 'Wipro', color: 'blue-600', size: 'text-sm' },
+  { name: 'WNS', color: 'orange-600', size: 'text-sm' },
+];
+
+// Reusable Components
+const NavigationLink = React.memo(({ to, label, active }) => (
+  <Link
+    to={to}
+    className={`bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md ${active ? 'border-2 border-white/40' : ''}`}
+  >
+    {label}
+  </Link>
+));
+
+const CustomerCard = React.memo(({ name, color, size, italic }) => (
+  <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
+    <div className={`text-${color} font-bold ${size || 'text-lg'} ${italic ? 'italic' : ''}`}>
+      {name}
+    </div>
+  </div>
+));
 
 const OurCustomers = () => {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const threshold = windowHeight * 3; // Show after 3 sections
-      
-      setShowBackToTop(scrollPosition > threshold);
+      setShowBackToTop(window.scrollY > 2000);
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
-  };
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   return (
-    <>
     <div className="min-h-screen bg-white">
-      
       {/* Back to Top Button */}
       {showBackToTop && (
         <button
@@ -44,80 +223,46 @@ const OurCustomers = () => {
       <section className="bg-gradient-to-r from-teal-600 to-teal-700 py-20 pt-8">
         <div className="max-w-7xl mx-auto px-8">
           <div className="flex flex-col lg:flex-row items-center justify-between">
-            
             {/* Left Content */}
             <div className="lg:w-1/2 mb-8 lg:mb-0">
               <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6">
                 Our<br />
                 Customers
               </h1>
-              
-              {/* Navigation Links */}
               <div className="flex flex-wrap gap-3 mt-8">
-                <Link to="/about/company" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  About Brain Bridge
-                </Link>
-                <Link to="/about/team" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  Our Affiliations
-                </Link>
-                <Link to="/about/mission" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md border-2 border-white/40">
-                  Our Customers
-                </Link>
-                <Link to="/about/testimonials" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  Placement Partners
-                </Link>
-                <Link to="/reviews/participant" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  Participant Reviews
-                </Link>
-                <Link to="/reviews/corporate" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  Corporate Training Reviews
-                </Link>
-                <Link to="/reviews/college" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  College Training Reviews
-                </Link>
-                <Link to="/reviews/job-support" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  Job Support Reviews
-                </Link>
-                <Link to="/courses/all" className="bg-gradient-to-r from-white/20 to-white/30 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium hover:from-white/30 hover:to-white/40 cursor-pointer transition-all duration-300 shadow-md">
-                  All Courses
-                </Link>
+                {navLinks.map((link, index) => (
+                  <NavigationLink key={index} {...link} />
+                ))}
               </div>
             </div>
-
-            {/* Right Content - Forbes Card */}
+            {/* Right Content - Featured Image Card */}
             <div className="lg:w-1/2 flex justify-center lg:justify-end">
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-4 shadow-2xl max-w-md w-full border border-teal-100">
-
-                {/* Sample Image Container */}
                 <div className="w-full h-64 bg-white border-2 border-gray-200 rounded-lg shadow-inner flex items-center justify-center overflow-hidden mb-4">
-                  {/* Sample image - replace with your actual image */}
                   <img
                     src="https://images.pexels.com/photos/1595385/pexels-photo-1595385.jpeg"
                     alt="Our Customers Featured Image"
                     className="w-full h-full object-cover rounded"
+                    loading="lazy"
                     onError={(e) => {
-                      // Fallback if image doesn't load
                       e.target.style.display = 'none';
                       e.target.nextSibling.style.display = 'flex';
                     }}
                   />
-                  {/* Fallback content */}
-                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-br from-teal-50 to-teal-100" style={{display: 'none'}}>
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-br from-teal-50 to-teal-100" style={{ display: 'none' }}>
                     <svg className="w-16 h-16 mb-4 text-teal-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M4 3a2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                     </svg>
                     <p className="text-sm font-medium text-teal-600">Featured Image</p>
                     <p className="text-xs text-teal-500">Our Customers</p>
                   </div>
                 </div>
-
                 <div className="text-center">
                   <p className="text-sm text-teal-600 font-medium">Brain Bridge</p>
                   <p className="text-xs text-gray-500">Trusted by Leading Companies</p>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
@@ -125,528 +270,14 @@ const OurCustomers = () => {
       {/* Customer Logos Section */}
       <section className="bg-gradient-to-br from-gray-50 to-white py-20">
         <div className="max-w-7xl mx-auto px-8">
-
-          {/* Customer Companies Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-
-            {/* Row 1 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-lg">Airtel</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-lg">BSNL</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-lg italic">DENSO</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-900 font-bold text-lg">Gillette</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-lg">HCL</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-lg">Hero</div>
-            </div>
-
-            {/* Row 2 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-lg">HITACHI</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-lg">HP</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">ITC</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-yellow-600 font-bold text-sm">Jet Airways</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">L&T</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Maruti</div>
-            </div>
-
-            {/* Row 3 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Mindtree</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-lg">ORA</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Parrys</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Pricol</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-700 font-bold text-lg">SAP</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-700 font-bold text-sm">Standard</div>
-            </div>
-
-            {/* Row 4 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-lg">Sun</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-lg">TATA</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Vodafone</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Adobe</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Aegis</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">ALSTOM</div>
-            </div>
-
-            {/* Row 5 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Ameriprise</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">American</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Apollo</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">British Telecom</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">CSAV</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">eClerx</div>
-            </div>
-
-            {/* Row 6 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Fidelity</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Flipkart</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Flowserve</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">GoJavas</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-sm">HDFC Bank</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Hewlett Packard</div>
-            </div>
-
-            {/* Row 7 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Hind Exide</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">IndusInd Bank</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">KVK</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">BNP Paribas</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Corporate</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-lg">TCS</div>
-            </div>
-
-            {/* Row 8 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Medium Hotwire</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Microsoft</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Oceaneering</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Olam</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Perrigo</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Pune</div>
-            </div>
-
-            {/* Row 9 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Ecolab</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">Independent</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-sm">Reliance</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">SASMOS HET</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Smart Megh</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Snapdeal</div>
-            </div>
-
-            {/* Row 10 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Standard Chartered</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Stefanini IT</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">Untitled</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Wisemen</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Xerox Corp</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">YASH</div>
-            </div>
-
-            {/* Row 11 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">ABC Consultants</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">ABP</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Aditya Birla</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">XL CATLIN</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">ANDSLITE</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">ANGEL</div>
-            </div>
-
-            {/* Row 12 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Association</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Atlas Copco</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">BAJAJ FINANCE</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Bakerhill</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Birla Institute</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Boston Scientific</div>
-            </div>
-
-            {/* Row 13 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Brand Start</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">BWR Bharat</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Careers 360</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">ChessMate</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">CII</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Colonel Academy</div>
-            </div>
-
-            {/* Row 14 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Deloitte</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-yellow-600 font-bold text-sm">DHL</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">DREAM</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Early Makers</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Einfochips</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">Emerson</div>
-            </div>
-
-            {/* Row 15 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Etech Global</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-yellow-600 font-bold text-sm">EY</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Faurecia</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">FedEx</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Fidelity</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Fluor</div>
-            </div>
-
-            {/* Row 16 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Food Service</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Fresenius</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">GEOTECH</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">GSK</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">Granite</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Grant Thornton</div>
-            </div>
-
-            {/* Row 17 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-sm">HDFC BANK</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Hindpower</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Holostik</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">HONDA</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Howden</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">IBN</div>
-            </div>
-
-            {/* Row 18 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Indus Valley</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">IPS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-yellow-600 font-bold text-sm">Jet Airways</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Jindal Steel</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">L&T Infotech</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Lufthansa</div>
-            </div>
-
-            {/* Row 19 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Maersk</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">MET</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Metso</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Milton Cycles</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Mitsubishi</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Mizuho</div>
-            </div>
-
-            {/* Row 20 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Modern School</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Modi Naturals</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Morgan Stanley</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">NAESYS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">NCDC</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Nielsen</div>
-            </div>
-
-            {/* Row 21 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">NIIT</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Nomura</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Panasonic</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">PHILIPS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Porteck</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Quantum</div>
-            </div>
-
-            {/* Row 22 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Quickbooks</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">R1</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Religare</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">RG GROUP</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">Ronnie Finance</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Rustomjee</div>
-            </div>
-
-            {/* Row 23 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-yellow-600 font-bold text-sm">SARENS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Satyam</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-gray-600 font-bold text-sm">SHADES</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-purple-600 font-bold text-sm">Show Buzz</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Software One</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-800 font-bold text-sm">TATA POWER</div>
-            </div>
-
-            {/* Row 24 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Tech Mahindra</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">TechProcess</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-green-600 font-bold text-sm">Techprocompsoft</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">George Institute</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">Thomas Cook</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Trent</div>
-            </div>
-
-            {/* Row 25 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">UK INDIA</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Unique Logistics</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">UT DALLAS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Varun Beverages</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-teal-600 font-bold text-sm">VIDEOCON</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Vidya</div>
-            </div>
-
-            {/* Row 26 */}
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">WAPCOS</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-blue-600 font-bold text-sm">Wipro</div>
-            </div>
-            <div className="flex justify-center items-center p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 h-20">
-              <div className="text-orange-600 font-bold text-sm">WNS</div>
-            </div>
-
+            {customers.map((customer, index) => (
+              <CustomerCard key={index} {...customer} />
+            ))}
           </div>
-
         </div>
       </section>
-
     </div>
-    </>
   );
 };
 

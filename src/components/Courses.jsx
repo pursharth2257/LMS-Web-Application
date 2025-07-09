@@ -1,10 +1,146 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import api from '../../axiosConfig';
+import { motion } from 'framer-motion';
 import { FaBookmark } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
 
+// Constants
+const COLOR_PALETTE = [
+  { bgColor: 'bg-purple-500', textColor: 'text-purple-500' },
+  { bgColor: 'bg-teal-600', textColor: 'text-teal-600' },
+  { bgColor: 'bg-green-500', textColor: 'text-green-500' },
+  { bgColor: 'bg-orange-500', textColor: 'text-orange-500' },
+  { bgColor: 'bg-red-500', textColor: 'text-red-500' },
+  { bgColor: 'bg-indigo-500', textColor: 'text-indigo-500' },
+  { bgColor: 'bg-yellow-500', textColor: 'text-yellow-600' },
+  { bgColor: 'bg-teal-700', textColor: 'text-teal-700' },
+  { bgColor: 'bg-teal-500', textColor: 'text-teal-500' },
+  { bgColor: 'bg-cyan-500', textColor: 'text-cyan-500' },
+  { bgColor: 'bg-emerald-500', textColor: 'text-emerald-500' },
+  { bgColor: 'bg-rose-500', textColor: 'text-rose-500' },
+  { bgColor: 'bg-violet-500', textColor: 'text-violet-500' },
+  { bgColor: 'bg-amber-500', textColor: 'text-amber-600' },
+  { bgColor: 'bg-slate-600', textColor: 'text-slate-600' },
+  { bgColor: 'bg-lime-500', textColor: 'text-lime-600' },
+];
+
+const ERROR_MESSAGES = {
+  NO_TOKEN: 'Please log in to bookmark courses',
+  SESSION_EXPIRED: 'Session expired. Please log in again.',
+  FETCH_COURSES: 'Failed to fetch courses',
+  FETCH_BOOKMARKS: 'Failed to fetch bookmarked courses',
+  BOOKMARK_FAILED: 'Failed to update bookmark',
+};
+
+// Modal Component (Reused from JobSupportReviews.js)
+const Modal = ({ isOpen, message, type, onClose }) => {
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => onClose(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div
+        className={`p-6 rounded-lg shadow-lg max-w-sm w-full ${
+          type === 'success' ? 'bg-green-100' : 'bg-red-100'
+        }`}
+      >
+        <p
+          className={`text-sm font-medium ${
+            type === 'success' ? 'text-green-800' : 'text-red-800'
+          }`}
+        >
+          {message}
+        </p>
+        <button
+          onClick={onClose}
+          className={`mt-4 px-4 py-2 rounded text-white text-sm ${
+            type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+          }`}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Course Card Component
+const CourseCard = memo(({ course, bookmarkedCourses, handleBookmark }) => (
+  <Link
+    to={`/courses/${course._id}`}
+    className="group rounded-2xl p-4 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer border-[0.5px] border-gray-200 bg-white hover:bg-teal-50"
+  >
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleBookmark(course._id);
+        }}
+        className={`absolute top-2 right-2 p-2 rounded-full ${
+          bookmarkedCourses.includes(course._id)
+            ? 'text-yellow-500 bg-white'
+            : 'text-gray-400 bg-white hover:text-yellow-500'
+        }`}
+      >
+        <FaBookmark />
+      </button>
+      <img
+        src={course.thumbnail}
+        alt={course.title}
+        className="w-full h-40 object-cover rounded-lg mb-4"
+        onError={(e) => {
+          e.target.src = 'https://via.placeholder.com/150';
+          e.target.onerror = null;
+          console.error('Thumbnail load error for URL:', course.thumbnail);
+        }}
+        loading="lazy"
+      />
+      <h3 className="text-lg font-bold text-gray-900 mb-2">{course.title}</h3>
+      <p className="text-sm text-gray-600 mb-2">
+        By {course.instructor.firstName} {course.instructor.lastName}
+      </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-teal-600 font-semibold">
+            {course.price === 0
+              ? 'Free'
+              : course.discountPrice
+              ? `₹${course.price - course.discountPrice}`
+              : `₹${course.price}`}
+          </span>
+          {course.discountPrice && course.price !== 0 && (
+            <span className="text-sm text-gray-500 line-through">₹{course.price}</span>
+          )}
+          {course.discountPrice && course.price !== 0 && (
+            <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs font-medium">
+              {Math.round(((course.price - (course.price - course.discountPrice)) / course.price) * 100)}% OFF
+            </span>
+          )}
+        </div>
+        <span className="text-sm text-gray-500">{course.totalStudents} students</span>
+      </div>
+      <div className="flex items-center mt-2">
+        <span className="text-yellow-500">{'★'.repeat(Math.round(course.rating))}</span>
+        <span className="text-sm text-gray-500 ml-2">({course.totalRatings} ratings)</span>
+      </div>
+    </motion.div>
+  </Link>
+));
+
+// Component
 const Courses = () => {
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [courses, setCourses] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -12,42 +148,36 @@ const Courses = () => {
   const [error, setError] = useState(null);
   const [bookmarkedCourses, setBookmarkedCourses] = useState([]);
   const [notification, setNotification] = useState({ message: '', type: '' });
-  const navigate = useNavigate();
 
-  // Color palette for dynamic assignment
-  const colorPalette = [
-    { bgColor: 'bg-purple-500', textColor: 'text-purple-500' },
-    { bgColor: 'bg-teal-600', textColor: 'text-teal-600' },
-    { bgColor: 'bg-green-500', textColor: 'text-green-500' },
-    { bgColor: 'bg-orange-500', textColor: 'text-orange-500' },
-    { bgColor: 'bg-red-500', textColor: 'text-red-500' },
-    { bgColor: 'bg-indigo-500', textColor: 'text-indigo-500' },
-    { bgColor: 'bg-yellow-500', textColor: 'text-yellow-600' },
-    { bgColor: 'bg-teal-700', textColor: 'text-teal-700' },
-    { bgColor: 'bg-teal-500', textColor: 'text-teal-500' },
-    { bgColor: 'bg-cyan-500', textColor: 'text-cyan-500' },
-    { bgColor: 'bg-emerald-500', textColor: 'text-emerald-500' },
-    { bgColor: 'bg-rose-500', textColor: 'text-rose-500' },
-    { bgColor: 'bg-violet-500', textColor: 'text-violet-500' },
-    { bgColor: 'bg-amber-500', textColor: 'text-amber-600' },
-    { bgColor: 'bg-slate-600', textColor: 'text-slate-600' },
-    { bgColor: 'bg-lime-500', textColor: 'text-lime-600' },
-  ];
-
-  // Fetch courses from API
+  // Fetch courses
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const response = await axios.get('https://lms-backend-flwq.onrender.com/api/v1/courses');
-        setCourses(response.data.data || []);
-        setLoading(false);
+        setLoading(true);
+        setError(null);
+        const response = await api.get('/courses');
+        console.log('Courses response:', response.data);
+        if (response.data.success) {
+          setCourses(response.data.data || []);
+        } else {
+          throw new Error(response.data.message || ERROR_MESSAGES.FETCH_COURSES);
+        }
       } catch (err) {
-        setError('Failed to fetch courses');
+        console.error('Fetch Courses Error:', err.response?.data || err);
+        let errorMessage = err.response?.data?.message || ERROR_MESSAGES.FETCH_COURSES;
+        if (err.response?.status === 401) {
+          errorMessage = ERROR_MESSAGES.SESSION_EXPIRED;
+          localStorage.removeItem('Token');
+          localStorage.removeItem('user');
+          setTimeout(() => navigate('/'), 2000);
+        }
+        setError(errorMessage);
+      } finally {
         setLoading(false);
       }
     };
     fetchCourses();
-  }, []);
+  }, [navigate]);
 
   // Fetch bookmarked courses
   useEffect(() => {
@@ -56,69 +186,58 @@ const Courses = () => {
         const token = localStorage.getItem('Token');
         if (!token) return;
 
-        const response = await axios.get(
-          'https://new-lms-backend-vmgr.onrender.com/api/v1/students/courses/bookmarked',
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
+        const response = await api.get('/students/courses/bookmarked');
+        console.log('Bookmarked Courses response:', response.data);
         if (response.data.success) {
           setBookmarkedCourses(response.data.data.map(course => course._id));
+        } else {
+          throw new Error(response.data.message || ERROR_MESSAGES.FETCH_BOOKMARKS);
         }
       } catch (err) {
-        console.error('Error fetching bookmarked courses:', err);
+        console.error('Fetch Bookmarked Courses Error:', err.response?.data || err);
+        setNotification({ message: ERROR_MESSAGES.FETCH_BOOKMARKS, type: 'error' });
+        setTimeout(() => setNotification({ message: '', type: '' }), 3000);
       }
     };
-
     fetchBookmarkedCourses();
   }, []);
 
-  const handleBookmark = async (courseId) => {
+  // Handle bookmark
+  const handleBookmark = useCallback(async (courseId) => {
     try {
       const token = localStorage.getItem('Token');
       if (!token) {
-        setNotification({ message: 'Please login to bookmark courses', type: 'error' });
-        navigate('/');
+        setNotification({ message: ERROR_MESSAGES.NO_TOKEN, type: 'error' });
+        setTimeout(() => navigate('/'), 2000);
         return;
       }
 
       const isBookmarked = bookmarkedCourses.includes(courseId);
-      
-      const response = await axios.patch(
-        `https://new-lms-backend-vmgr.onrender.com/api/v1/students/courses/${courseId}/bookmark`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.patch(`/students/courses/${courseId}/bookmark`);
+      console.log('Bookmark response:', response.data);
 
       if (response.data.success) {
         setNotification({
           message: isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks',
           type: 'success',
         });
-        // Update bookmarked courses list
-        if (isBookmarked) {
-          setBookmarkedCourses(bookmarkedCourses.filter(id => id !== courseId));
-        } else {
-          setBookmarkedCourses([...bookmarkedCourses, courseId]);
-        }
+        setBookmarkedCourses(prev =>
+          isBookmarked ? prev.filter(id => id !== courseId) : [...prev, courseId]
+        );
+      } else {
+        throw new Error(response.data.message || ERROR_MESSAGES.BOOKMARK_FAILED);
       }
     } catch (err) {
-      console.error('Bookmark Error:', err);
+      console.error('Bookmark Error:', err.response?.data || err);
       setNotification({
-        message: err.response?.data?.message || 'Failed to update bookmark',
+        message: err.response?.data?.message || ERROR_MESSAGES.BOOKMARK_FAILED,
         type: 'error',
       });
     }
-  };
+    setTimeout(() => setNotification({ message: '', type: '' }), 3000);
+  }, [bookmarkedCourses, navigate]);
 
-  // Handle escape key to close modal
+  // Handle modal close on Escape key
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
@@ -137,82 +256,98 @@ const Courses = () => {
     };
   }, [showModal]);
 
-  // Generate dynamic categories from API
-  const categories = [...new Set(courses.map((course) => course.category).filter(Boolean))].map((category, index) => ({
-    id: index + 1,
-    title: category,
-    courses: `${courses.filter((course) => course.category === category).length} Courses`,
-    ...colorPalette[index % colorPalette.length], // Assign colors cyclically
-  }));
+  // Generate categories
+  const categories = useMemo(() => {
+    return [...new Set(courses.map(course => course.category).filter(Boolean))].map((category, index) => ({
+      id: index + 1,
+      title: category,
+      courses: `${courses.filter(course => course.category === category).length} Courses`,
+      ...COLOR_PALETTE[index % COLOR_PALETTE.length],
+    }));
+  }, [courses]);
 
-  // Show first 8 categories by default
-  const mainCategories = categories.slice(0, 8);
+  // Main categories (first 8)
+  const mainCategories = useMemo(() => categories.slice(0, 8), [categories]);
 
-  // Handle category click to show modal with courses
-  const handleCategoryClick = (category) => {
-    setSelectedCategory(category);
-    setShowModal(true);
-  };
+  // Filtered courses for modal
+  const filteredCourses = useMemo(() =>
+    selectedCategory ? courses.filter(course => course.category === selectedCategory.title) : []
+  , [courses, selectedCategory]);
 
-  // Filter courses by selected category
-  const filteredCourses = selectedCategory
-    ? courses.filter((course) => course.category === selectedCategory.title)
-    : [];
-
-  // Calculate display price for a course
-  const getDisplayPrice = (course) => {
+  // Pricing functions
+  const getDisplayPrice = useCallback(course => {
     if (course.price === 0) return 'Free';
-    if (course.discountPrice) {
-      return `₹${course.price - course.discountPrice}`;
-    }
+    if (course.discountPrice) return `₹${course.price - course.discountPrice}`;
     return `₹${course.price}`;
-  };
+  }, []);
 
-  // Calculate original price for display
-  const getOriginalPrice = (course) => {
-    if (course.discountPrice && course.price !== 0) {
-      return `₹${course.price}`;
-    }
+  const getOriginalPrice = useCallback(course => {
+    if (course.discountPrice && course.price !== 0) return `₹${course.price}`;
     return null;
-  };
+  }, []);
 
-  // Calculate discount percentage
-  const getDiscountPercentage = (course) => {
+  const getDiscountPercentage = useCallback(course => {
     if (course.discountPrice && course.price !== 0) {
       return Math.round(((course.price - (course.price - course.discountPrice)) / course.price) * 100);
     }
     return null;
-  };
+  }, []);
+
+  // Handle category click
+  const handleCategoryClick = useCallback(category => {
+    setSelectedCategory(category);
+    setShowModal(true);
+  }, []);
 
   return (
     <section className="py-16">
+      <Modal
+        isOpen={!!notification.message}
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ message: '', type: '' })}
+      />
       <div className="w-full px-0 sm:px-2 lg:px-4">
         {/* Section Header */}
         <div className="mb-8 px-4 sm:px-6 lg:px-8">
-          <div className="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-full text-sm font-medium mb-4">
+          <motion.div
+            className="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-full text-sm font-medium mb-4"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
             Course Categories
-          </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
+          </motion.div>
+          <motion.h2
+            className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
             Choose your <span className="text-teal-600">area of interest</span>
-          </h2>
+          </motion.h2>
         </div>
 
         {/* Categories Grid */}
         {loading ? (
-          <p className="text-center">Loading...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-teal-600 mx-auto"></div>
+          </div>
         ) : error ? (
           <p className="text-center text-red-600">{error}</p>
         ) : categories.length === 0 ? (
           <p className="text-center text-gray-500">No categories available.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 max-w-7xl mx-auto">
-            {mainCategories.map((category) => (
-              <div
+            {mainCategories.map(category => (
+              <motion.div
                 key={category.id}
                 onClick={() => handleCategoryClick(category)}
                 className="group rounded-2xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer border-[0.5px] border-gray-200 relative overflow-hidden bg-teal-50 hover:bg-teal-100"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
               >
-                {/* Icon with dotted circle */}
                 <div className="flex justify-center mb-3 sm:mb-4">
                   <div className="relative">
                     <div className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-dashed rounded-full absolute inset-0 border-teal-600"></div>
@@ -270,8 +405,6 @@ const Courses = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Content */}
                 <div className="text-center">
                   <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2 relative">
                     {category.title}
@@ -281,7 +414,7 @@ const Courses = () => {
                     <p className="text-teal-600 font-medium text-xs">{category.courses}</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
@@ -300,32 +433,14 @@ const Courses = () => {
         </div>
       </div>
 
-      {/* Notification */}
-      {notification.message && (
-        <div className={`fixed top-4 right-4 p-4 rounded-md shadow-2xl text-white z-[60] transition-all duration-300 transform ${
-          notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span>{notification.message}</span>
-            <button onClick={() => setNotification({ message: '', type: '' })} className="ml-4">
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Modal Popup */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 backdrop-blur-lg bg-white bg-opacity-10"
             onClick={() => setShowModal(false)}
           ></div>
-
-          {/* Modal Content */}
           <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
             <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl sm:rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div>
@@ -346,65 +461,18 @@ const Courses = () => {
                 </button>
               </div>
             </div>
-
-            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {filteredCourses.length === 0 ? (
                 <p className="text-center text-gray-500">No courses available in this category.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {filteredCourses.map((course) => (
-                    <Link
-                      to={`/courses/${course._id}`}
+                  {filteredCourses.map(course => (
+                    <CourseCard
                       key={course._id}
-                      className="group rounded-2xl p-4 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer border-[0.5px] border-gray-200 bg-white hover:bg-teal-50"
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleBookmark(course._id);
-                        }}
-                        className={`absolute top-2 right-2 p-2 rounded-full ${
-                          bookmarkedCourses.includes(course._id)
-                            ? 'text-yellow-500 bg-white'
-                            : 'text-gray-400 bg-white hover:text-yellow-500'
-                        }`}
-                      >
-                        <FaBookmark />
-                      </button>
-                      <img
-                        src={course.thumbnail}
-                        alt={course.title}
-                        className="w-full h-40 object-cover rounded-lg mb-4"
-                        onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/150';
-                          console.error('Thumbnail load error for URL:', course.thumbnail);
-                        }}
-                      />
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">{course.title}</h3>
-                      <p className="text-sm text-gray-600 mb-2">
-                        By {course.instructor.firstName} {course.instructor.lastName}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-teal-600 font-semibold">{getDisplayPrice(course)}</span>
-                          {getOriginalPrice(course) && (
-                            <span className="text-sm text-gray-500 line-through">{getOriginalPrice(course)}</span>
-                          )}
-                          {getDiscountPercentage(course) && (
-                            <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs font-medium">
-                              {getDiscountPercentage(course)}% OFF
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-sm text-gray-500">{course.totalStudents} students</span>
-                      </div>
-                      <div className="flex items-center mt-2">
-                        <span className="text-yellow-500">{'★'.repeat(Math.round(course.rating))}</span>
-                        <span className="text-sm text-gray-500 ml-2">({course.totalRatings} ratings)</span>
-                      </div>
-                    </Link>
+                      course={course}
+                      bookmarkedCourses={bookmarkedCourses}
+                      handleBookmark={handleBookmark}
+                    />
                   ))}
                 </div>
               )}

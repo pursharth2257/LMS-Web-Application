@@ -1,24 +1,336 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, memo } from 'react';
+import api from '../../axiosConfig';
+import { motion } from 'framer-motion';
 import { FaTimes, FaRocket, FaStar, FaGraduationCap } from 'react-icons/fa';
 import { AiOutlineEye, AiOutlineEyeInvisible } from 'react-icons/ai';
 import { useSignUp } from '../contexts/SignUpContext';
 import { useNavigate } from 'react-router-dom';
 
+// Constants
+const ERROR_MESSAGES = {
+  INVALID_TOKEN: 'Invalid token detected. Please try again.',
+  GOOGLE_SCRIPT_FAILED: 'Failed to load Google Sign-In script. Please try again later.',
+  GOOGLE_AUTH_FAILED: 'Google authentication failed. Please try again.',
+  PASSWORDS_MISMATCH: 'Passwords do not match!',
+  PASSWORD_TOO_SHORT: 'Password must be at least 6 characters long!',
+  INVALID_EMAIL_PASSWORD: 'Please enter both email and password.',
+  INVALID_OTP: 'Please enter a valid 6-digit OTP.',
+  REGISTRATION_FAILED: 'An error occurred during registration. Please try again.',
+  OTP_VERIFICATION_FAILED: 'Invalid OTP. Please try again.',
+  LOGIN_FAILED: 'Invalid email or password. Please try again.',
+  NOT_FOUND: 'Service unavailable. Please try again later or contact support.',
+  FORGOT_PASSWORD: 'Forgot Password functionality not implemented.',
+  EMAIL_ALREADY_VERIFIED: 'Email already registered and verified. Please log in.',
+};
+
+// Modal Component
+const Modal = ({ isOpen, message, type, onClose }) => {
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => onClose(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div
+        className={`p-6 rounded-lg shadow-lg max-w-sm w-full ${
+          type === 'success' ? 'bg-green-100' : 'bg-red-100'
+        }`}
+      >
+        <p
+          className={`text-sm font-medium ${
+            type === 'success' ? 'text-green-800' : 'text-red-800'
+          }`}
+        >
+          {message}
+        </p>
+        <button
+          onClick={onClose}
+          className={`mt-4 px-4 py-2 rounded text-white text-sm ${
+            type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+          }`}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Login Form Component
+const LoginForm = memo(({ loginData, handleLoginChange, handleLogin, isLoading, showPassword, togglePassword, setErrorMessage }) => (
+  <div className="space-y-3 sm:space-y-4">
+    <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4">
+      <div className="mb-3 sm:mb-4">
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Email</label>
+        <input
+          type="email"
+          name="email"
+          value={loginData.email}
+          onChange={handleLoginChange}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
+          required
+        />
+      </div>
+      <div className="mb-3 sm:mb-4 relative">
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Password</label>
+        <input
+          type={showPassword ? 'text' : 'password'}
+          name="password"
+          value={loginData.password}
+          onChange={handleLoginChange}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
+          required
+        />
+        <button
+          type="button"
+          onClick={togglePassword}
+          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
+        >
+          {showPassword ? (
+            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
+          ) : (
+            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
+          )}
+        </button>
+      </div>
+      <div className="flex justify-between items-center mb-4 sm:mb-5">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={`py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setErrorMessage(ERROR_MESSAGES.FORGOT_PASSWORD)}
+          className="text-teal-600 hover:underline text-sm sm:text-base"
+        >
+          Forgot Password?
+        </button>
+      </div>
+    </form>
+    <div
+      id="g_id_onload"
+      data-client_id="985947726470-5lflb818ib5ee246iucdbkpru7m5i1c8.apps.googleusercontent.com"
+      data-callback="handleCredentialResponse"
+      data-auto_prompt="false"
+      data-ux_mode="popup"
+      className="w-full flex justify-center"
+    >
+      <div
+        className="g_id_signin"
+        data-type="standard"
+        data-size="large"
+        data-theme="outline"
+        data-text="signin_with"
+        data-shape="rectangular"
+        data-logo_alignment="left"
+      ></div>
+    </div>
+  </div>
+));
+
+// Register Form Component
+const RegisterForm = memo(({ registerData, handleRegisterChange, handleRegisterSubmit, isLoading, showPassword, togglePassword }) => (
+  <div className="space-y-3 sm:space-y-4">
+    <form onSubmit={handleRegisterSubmit} className="space-y-3 sm:space-y-4 max-h-80 sm:max-h-96 overflow-y-auto scrollbar-hide">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div>
+          <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">First Name</label>
+          <input
+            type="text"
+            name="firstName"
+            value={registerData.firstName}
+            onChange={handleRegisterChange}
+            className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Last Name</label>
+          <input
+            type="text"
+            name="lastName"
+            value={registerData.lastName}
+            onChange={handleRegisterChange}
+            className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
+            required
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Email</label>
+        <input
+          type="email"
+          name="email"
+          value={registerData.email}
+          onChange={handleRegisterChange}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Phone Number (optional)</label>
+        <div className="flex">
+          <div className="flex items-center bg-gray-50 border border-teal-500 rounded-l-md px-3">
+            <img
+              src="https://flagcdn.com/w20/in.png"
+              alt="India"
+              className="w-5 h-3 mr-2"
+              loading="lazy"
+            />
+            <span className="text-gray-700 font-medium">+91</span>
+          </div>
+          <input
+            type="tel"
+            name="phone"
+            value={registerData.phone}
+            onChange={handleRegisterChange}
+            className="flex-1 p-2 sm:p-3 border border-l-0 border-teal-500 rounded-r-md text-sm sm:text-base"
+          />
+        </div>
+      </div>
+      <div className="relative">
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Password</label>
+        <input
+          type={showPassword ? 'text' : 'password'}
+          name="password"
+          value={registerData.password}
+          onChange={handleRegisterChange}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
+          required
+          minLength="6"
+        />
+        <button
+          type="button"
+          onClick={togglePassword}
+          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
+        >
+          {showPassword ? (
+            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
+          ) : (
+            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
+          )}
+        </button>
+      </div>
+      <div className="relative">
+        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Confirm Password</label>
+        <input
+          type={showPassword ? 'text' : 'password'}
+          name="confirmPassword"
+          value={registerData.confirmPassword}
+          onChange={handleRegisterChange}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
+          required
+          minLength="6"
+        />
+        <button
+          type="button"
+          onClick={togglePassword}
+          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
+        >
+          {showPassword ? (
+            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
+          ) : (
+            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
+          )}
+        </button>
+      </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className={`w-full py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        {isLoading ? 'Registering...' : 'Create Account'}
+      </button>
+    </form>
+    <div
+      id="g_id_onload"
+      data-client_id="985947726470-5lflb818ib5ee246iucdbkpru7m5i1c8.apps.googleusercontent.com"
+      data-callback="handleCredentialResponse"
+      data-auto_prompt="false"
+      data-ux_mode="popup"
+      className="w-full flex justify-center"
+    >
+      <div
+        className="g_id_signin"
+        data-type="standard"
+        data-size="large"
+        data-theme="outline"
+        data-text="signup_with"
+        data-shape="rectangular"
+        data-logo_alignment="left"
+      ></div>
+    </div>
+  </div>
+));
+
+// Otp Form Component
+const OtpForm = memo(({ otp, setOtp, handleOtpSubmit, handleResendOtp, isLoading, email, setIsLogin, setShowOtpPopup }) => (
+  <div className="p-4 sm:p-6 lg:p-8 flex flex-col justify-center items-center">
+    <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-center">Enter OTP</h2>
+    <p className="text-gray-600 mb-4 text-sm sm:text-base">
+      An OTP has been sent to {email}. Please enter it below.
+    </p>
+    <form onSubmit={handleOtpSubmit} className="w-full max-w-xs sm:max-w-sm space-y-4">
+      <div>
+        <label className="block text-gray-700 mb-2 text-sm sm:text-base">OTP</label>
+        <input
+          type="text"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
+          required
+          maxLength="6"
+          placeholder="Enter 6-digit OTP"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className={`w-full py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        {isLoading ? 'Verifying...' : 'Verify OTP'}
+      </button>
+      <button
+        type="button"
+        onClick={handleResendOtp}
+        disabled={isLoading}
+        className={`w-full py-2 px-4 sm:py-3 sm:px-6 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        Resend OTP
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setShowOtpPopup(false);
+          setIsLogin(true);
+        }}
+        className="w-full py-2 px-4 sm:py-3 sm:px-6 text-teal-600 hover:underline text-sm sm:text-base"
+      >
+        Back to Login
+      </button>
+    </form>
+  </div>
+));
+
+// Component
 const SignUpPopup = () => {
   const { isPopupVisible, hideSignUpPopup, showSignUpPopup } = useSignUp();
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [notification, setNotification] = useState({ message: '', type: '' });
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loginData, setLoginData] = useState({
-    email: '',
-    password: '',
-  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [registerData, setRegisterData] = useState({
     firstName: '',
     lastName: '',
@@ -28,105 +340,90 @@ const SignUpPopup = () => {
     confirmPassword: '',
     role: 'student',
   });
-  const navigate = useNavigate();
+  const [userId, setUserId] = useState(''); // Store userId for OTP verification
 
-  // Initialize Google Sign-In and clean up invalid tokens
+  // Initialize Google Sign-In
   useEffect(() => {
-    // Clear invalid token on app initialization
     const token = localStorage.getItem('Token');
     if (token) {
       try {
-        // Basic token validation (check format)
         const parts = token.split('.');
         if (parts.length !== 3) throw new Error('Invalid token format');
       } catch (error) {
         console.error('Invalid token detected:', error);
         localStorage.removeItem('Token');
+        setNotification({ message: ERROR_MESSAGES.INVALID_TOKEN, type: 'error' });
       }
     }
 
-    // Load the Google Sign-In script
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
-    // Handle script load errors
     script.onerror = () => {
-      setErrorMessage('Failed to load Google Sign-In script. Please try again later.');
+      setNotification({ message: ERROR_MESSAGES.GOOGLE_SCRIPT_FAILED, type: 'error' });
       console.error('Google Sign-In script failed to load.');
     };
     document.body.appendChild(script);
-
-    window.handleCredentialResponse = async (response) => {
-      try {
-        setIsLoading(true);
-        setErrorMessage('');
-        setSuccessMessage('');
-
-        // Log the Google ID token for debugging
-        console.log('Google ID Token:', response.credential);
-
-        // Send the Google ID token to the backend for verification
-        const res = await axios.post(
-          'https://new-lms-backend-vmgr.onrender.com/api/v1/auth/google',
-          { idToken: response.credential },
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-
-        if (res.data.success && res.data.data.token) {
-          // Store the token only if it exists
-          localStorage.setItem('Token', res.data.data.token);
-          setSuccessMessage('Google authentication successful! Welcome!');
-          setTimeout(() => {
-            hideSignUpPopup();
-            navigate('/');
-            window.location.reload();
-          }, 2000);
-        } else {
-          console.error('Google Sign-In failed: No token received', res.data);
-          setErrorMessage(res.data.message || 'Google authentication failed: No token received.');
-          localStorage.removeItem('Token');
-        }
-      } catch (error) {
-        // Enhanced error logging for debugging
-        console.error('Google authentication error:', error);
-        console.log('Error response:', error.response?.data);
-        console.log('Error status:', error.response?.status);
-        console.log('Error URL:', error.config?.url);
-        const errorMsg = error.response?.status === 404
-          ? 'Google Sign-In endpoint not found. Please try again later or contact support.'
-          : error.response?.data?.message || 'Google authentication failed. Please try again.';
-        setErrorMessage(errorMsg);
-        localStorage.removeItem('Token');
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
     return () => {
       document.body.removeChild(script);
       delete window.handleCredentialResponse;
     };
-  }, [hideSignUpPopup, navigate]);
+  }, []);
 
+  // Auto-show popup
   useEffect(() => {
-    const interval = setInterval(() => {
-      showSignUpPopup();
-    }, 900000);
-
-    const initialTimeout = setTimeout(() => {
-      showSignUpPopup();
-    }, 900000);
-
+    const interval = setInterval(() => showSignUpPopup(), 900000);
+    const initialTimeout = setTimeout(() => showSignUpPopup(), 900000);
     return () => {
       clearInterval(interval);
       clearTimeout(initialTimeout);
     };
   }, [showSignUpPopup]);
 
-  const handleClose = () => {
+  // Handle Google Sign-In
+  const handleCredentialResponse = useCallback(async (response) => {
+    try {
+      setIsLoading(true);
+      setNotification({ message: '', type: '' });
+      console.log('Google ID Token:', response.credential);
+      const res = await api.post('/auth/google', { idToken: response.credential });
+      console.log('Google Sign-In response:', res.data);
+      if (res.data.success && res.data.data.token) {
+        localStorage.setItem('Token', res.data.data.token);
+        setNotification({ message: 'Google authentication successful! Welcome!', type: 'success' });
+        setTimeout(() => {
+          hideSignUpPopup();
+          navigate('/');
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error(res.data.message || ERROR_MESSAGES.GOOGLE_AUTH_FAILED);
+      }
+    } catch (error) {
+      console.error('Google authentication error:', error.response?.data || error);
+      const errorMsg = error.response?.status === 404
+        ? ERROR_MESSAGES.NOT_FOUND
+        : error.response?.data?.message || ERROR_MESSAGES.GOOGLE_AUTH_FAILED;
+      setNotification({ message: errorMsg, type: 'error' });
+      localStorage.removeItem('Token');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [hideSignUpPopup, navigate]);
+
+  // Register global Google callback
+  useEffect(() => {
+    window.handleCredentialResponse = handleCredentialResponse;
+    return () => {
+      delete window.handleCredentialResponse;
+    };
+  }, [handleCredentialResponse]);
+
+  // Handle close
+  const handleClose = useCallback(() => {
     hideSignUpPopup();
-    setErrorMessage('');
-    setSuccessMessage('');
+    setNotification({ message: '', type: '' });
     setIsLogin(false);
     setShowOtpPopup(false);
     setOtp('');
@@ -140,102 +437,133 @@ const SignUpPopup = () => {
       confirmPassword: '',
       role: 'student',
     });
-  };
+    setUserId('');
+  }, [hideSignUpPopup]);
 
-  const handleLoginChange = (e) => {
+  // Handle login input change
+  const handleLoginChange = useCallback((e) => {
     const { name, value } = e.target;
-    setLoginData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+    setLoginData(prev => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleRegisterChange = (e) => {
+  // Handle register input change
+  const handleRegisterChange = useCallback((e) => {
     const { name, value } = e.target;
-    setRegisterData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+    setRegisterData(prev => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleRegisterSubmit = async (e) => {
+  // Handle login submit
+  const handleLogin = useCallback(async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
+    setNotification({ message: '', type: '' });
+
+    if (!loginData.email || !loginData.password) {
+      setNotification({ message: ERROR_MESSAGES.INVALID_EMAIL_PASSWORD, type: 'error' });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await api.post('/auth/login', {
+        email: loginData.email,
+        password: loginData.password,
+      });
+      console.log('Login response:', response.data);
+      const { success, message, data } = response.data;
+      if (success && data.token) {
+        localStorage.setItem('Token', data.token);
+        setNotification({ message: 'Login successful! Welcome back!', type: 'success' });
+        setLoginData({ email: '', password: '' });
+        setTimeout(() => {
+          handleClose();
+          navigate('/');
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error(message || ERROR_MESSAGES.LOGIN_FAILED);
+      }
+    } catch (error) {
+      console.error('Login error:', error.response?.data || error);
+      const errorMsg = error.response?.data?.message || ERROR_MESSAGES.LOGIN_FAILED;
+      setNotification({ message: errorMsg, type: 'error' });
+      localStorage.removeItem('Token');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loginData, navigate, handleClose]);
+
+  // Handle register submit
+  const handleRegisterSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setNotification({ message: '', type: '' });
 
     if (registerData.password !== registerData.confirmPassword) {
-      setErrorMessage('Passwords do not match!');
+      setNotification({ message: ERROR_MESSAGES.PASSWORDS_MISMATCH, type: 'error' });
       setIsLoading(false);
       return;
     }
 
     if (registerData.password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long!');
+      setNotification({ message: ERROR_MESSAGES.PASSWORD_TOO_SHORT, type: 'error' });
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await axios.post(
-        'https://new-lms-backend-vmgr.onrender.com/api/v1/auth/register',
-        {
-          firstName: registerData.firstName,
-          lastName: registerData.lastName,
-          email: registerData.email,
-          phone: registerData.phone,
-          password: registerData.password,
-          role: registerData.role,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      setShowOtpPopup(true);
-      setSuccessMessage('Registration successful! Please verify OTP sent to your email.');
+      const response = await api.post('/auth/register', {
+        firstName: registerData.firstName,
+        lastName: registerData.lastName,
+        email: registerData.email,
+        phone: registerData.phone,
+        password: registerData.password,
+        role: registerData.role,
+      });
+      console.log('Register response:', response.data);
+      const { success, message, data } = response.data;
+      if (success) {
+        setUserId(data.id);
+        setShowOtpPopup(true);
+        setNotification({ message: message, type: 'success' });
+      } else {
+        throw new Error(message || ERROR_MESSAGES.REGISTRATION_FAILED);
+      }
     } catch (error) {
-      console.error('Registration error:', error);
-      console.log('Error response:', error.response?.data);
-      console.log('Error status:', error.response?.status);
-      console.log('Error URL:', error.config?.url);
-      setErrorMessage(error.response?.data?.message || 'An error occurred during registration. Please try again.');
+      console.error('Registration error:', error.response?.data || error);
+      const errorMsg = error.response?.data?.message || ERROR_MESSAGES.REGISTRATION_FAILED;
+      if (errorMsg.includes('Email already registered and verified')) {
+        setNotification({ message: ERROR_MESSAGES.EMAIL_ALREADY_VERIFIED, type: 'error' });
+        setTimeout(() => setIsLogin(true), 3000);
+      } else {
+        setNotification({ message: errorMsg, type: 'error' });
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [registerData]);
 
-  const handleOtpSubmit = async (e) => {
+  // Handle OTP submit
+  const handleOtpSubmit = useCallback(async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
+    setNotification({ message: '', type: '' });
 
     if (!/^\d{6}$/.test(otp)) {
-      setErrorMessage('Please enter a valid 6-digit OTP.');
+      setNotification({ message: ERROR_MESSAGES.INVALID_OTP, type: 'error' });
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await axios.post(
-        'https://new-lms-backend-vmgr.onrender.com/api/v1/auth/verify-email',
-        {
-          email: registerData.email,
-          otp: otp,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.data.success && response.data.data.token) {
-        localStorage.setItem('Token', response.data.data.token);
-        setSuccessMessage('Thank you for signing up! Welcome to our learning platform!');
+      const response = await api.post('/auth/verify-email', {
+        email: registerData.email,
+        otp,
+      });
+      console.log('OTP verification response:', response.data);
+      if (response.data.success) {
+        localStorage.setItem('Token', response.data.data?.token || ''); // Backend may not return token
+        setNotification({ message: 'Email verified successfully! Please log in.', type: 'success' });
         setShowOtpPopup(false);
         setOtp('');
         setRegisterData({
@@ -247,85 +575,66 @@ const SignUpPopup = () => {
           confirmPassword: '',
           role: 'student',
         });
+        setUserId('');
         setTimeout(() => {
           setIsLogin(true);
-          setSuccessMessage('');
+          setNotification({ message: '', type: '' });
         }, 2000);
       } else {
-        console.error('OTP verification failed: No token received', response.data);
-        setErrorMessage(response.data.message || 'OTP verification failed: No token received.');
-        localStorage.removeItem('Token');
+        throw new Error(response.data.message || ERROR_MESSAGES.OTP_VERIFICATION_FAILED);
       }
     } catch (error) {
-      console.error('OTP verification error:', error);
-      console.log('Error response:', error.response?.data);
-      console.log('Error status:', error.response?.status);
-      console.log('Error URL:', error.config?.url);
-      setErrorMessage(error.response?.data?.message || 'Invalid OTP. Please try again.');
-      localStorage.removeItem('Token');
+      console.error('OTP verification error:', error.response?.data || error);
+      const errorMsg = error.response?.data?.message || ERROR_MESSAGES.OTP_VERIFICATION_FAILED;
+      setNotification({ message: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [otp, registerData.email]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  // Handle resend OTP
+  const handleResendOtp = useCallback(async () => {
     setIsLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!loginData.email || !loginData.password) {
-      setErrorMessage('Please enter both email and password.');
-      setIsLoading(false);
-      return;
-    }
+    setNotification({ message: '', type: '' });
 
     try {
-      const response = await axios.post(
-        'https://new-lms-backend-vmgr.onrender.com/api/v1/auth/login',
-        {
-          email: loginData.email,
-          password: loginData.password,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
+      const response = await api.post('/auth/resend-otp', {
+        email: registerData.email,
+      });
+      console.log('Resend OTP response:', response.data);
       const { success, message, data } = response.data;
-      if (success && data.token) {
-        localStorage.setItem('Token', data.token);
-        setSuccessMessage('Login successful! Welcome back!');
-        setLoginData({ email: '', password: '' });
-        setTimeout(() => {
-          handleClose();
-          navigate('/');
-          window.location.reload();
-        }, 2000);
+      if (success) {
+        setUserId(data.id);
+        setShowOtpPopup(true);
+        setNotification({ message: message, type: 'success' });
       } else {
-        console.error('Login failed: No token received', response.data);
-        setErrorMessage(message || 'Login failed: No token received.');
-        localStorage.removeItem('Token');
+        throw new Error(message || 'Failed to resend OTP.');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      console.log('Error response:', error.response?.data);
-      console.log('Error status:', error.response?.status);
-      console.log('Error URL:', error.config?.url);
-      setErrorMessage(error.response?.data?.message || 'Invalid email or password. Please try again.');
-      localStorage.removeItem('Token');
+      console.error('Resend OTP error:', error.response?.data || error);
+      const errorMsg = error.response?.data?.message || 'Failed to resend OTP.';
+      setNotification({ message: errorMsg, type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [registerData.email]);
 
   if (!isPopupVisible) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden relative">
+      <Modal
+        isOpen={!!notification.message}
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ message: '', type: '' })}
+      />
+      <motion.div
+        className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden relative"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+      >
         <button
           onClick={handleClose}
           className="absolute top-3 right-3 sm:top-4 sm:right-4 w-7 h-7 sm:w-8 sm:h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
@@ -334,51 +643,16 @@ const SignUpPopup = () => {
         </button>
 
         {showOtpPopup ? (
-          <div className="p-4 sm:p-6 lg:p-8 flex flex-col justify-center items-center">
-            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-center">Enter OTP</h2>
-            <p className="text-gray-600 mb-4 text-sm sm:text-base">
-              An OTP has been sent to {registerData.email}. Please enter it below.
-            </p>
-            {errorMessage && <p className="text-red-500 mb-4 text-center text-sm sm:text-base">{errorMessage}</p>}
-            {successMessage && (
-              <div className="text-center">
-                <p className="text-green-500 mb-4 text-sm sm:text-base">{successMessage}</p>
-                <button
-                  onClick={() => {
-                    setSuccessMessage('');
-                    setIsLogin(true);
-                    setShowOtpPopup(false);
-                  }}
-                  className="bg-teal-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded hover:bg-teal-600 text-sm sm:text-base"
-                >
-                  Back to Login
-                </button>
-              </div>
-            )}
-            {!successMessage && (
-              <form onSubmit={handleOtpSubmit} className="w-full max-w-xs sm:max-w-sm space-y-4">
-                <div>
-                  <label className="block text-gray-700 mb-2 text-sm sm:text-base">OTP</label>
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
-                    required
-                    maxLength="6"
-                    placeholder="Enter 6-digit OTP"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className={`w-full py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isLoading ? 'Verifying...' : 'Verify OTP'}
-                </button>
-              </form>
-            )}
-          </div>
+          <OtpForm
+            otp={otp}
+            setOtp={setOtp}
+            handleOtpSubmit={handleOtpSubmit}
+            handleResendOtp={handleResendOtp}
+            isLoading={isLoading}
+            email={registerData.email}
+            setIsLogin={setIsLogin}
+            setShowOtpPopup={setShowOtpPopup}
+          />
         ) : (
           <div className="flex flex-col lg:flex-row">
             <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-teal-50 to-blue-50 p-6 lg:p-8 flex-col justify-center items-center relative">
@@ -426,14 +700,6 @@ const SignUpPopup = () => {
 
             <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
               <h2 className="text-xl text-center sm:text-2xl font-semibold mb-2 text-center">Welcome to LMS!</h2>
-
-              {errorMessage && <p className="text-red-500 mb-4 text-center text-sm sm:text-base">{errorMessage}</p>}
-              {successMessage && (
-                <div className="text-center">
-                  <p className="text-green-500 mb-4 text-sm sm:text-base">{successMessage}</p>
-                </div>
-              )}
-
               <div className="flex mb-4 sm:mb-6 justify-center">
                 <button
                   className={`px-4 py-2 sm:px-6 sm:py-2 text-white rounded-l-md ${isLogin ? 'bg-teal-500' : 'bg-teal-300'} text-sm sm:text-base`}
@@ -448,215 +714,28 @@ const SignUpPopup = () => {
                   REGISTER
                 </button>
               </div>
-
               <div className="w-full max-w-xs sm:max-w-sm">
                 {isLogin ? (
-                  <div className="space-y-3 sm:space-y-4">
-                    <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4">
-                      <div className="mb-3 sm:mb-4">
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Email</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={loginData.email}
-                          onChange={handleLoginChange}
-                          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
-                          required
-                        />
-                      </div>
-                      <div className="mb-3 sm:mb-4 relative">
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Password</label>
-                        <input
-                          type={showLoginPassword ? 'text' : 'password'}
-                          name="password"
-                          value={loginData.password}
-                          onChange={handleLoginChange}
-                          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowLoginPassword(!showLoginPassword)}
-                          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
-                        >
-                          {showLoginPassword ? (
-                            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
-                          ) : (
-                            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex justify-between items-center mb-4 sm:mb-5">
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className={`py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          {isLoading ? 'Logging in...' : 'Login'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setErrorMessage('Forgot Password functionality not implemented.')}
-                          className="text-teal-600 hover:underline text-sm sm:text-base"
-                        >
-                          Forgot Password?
-                        </button>
-                      </div>
-                    </form>
-                    <div
-                      id="g_id_onload"
-                      data-client_id="985947726470-5lflb818ib5ee246iucdbkpru7m5i1c8.apps.googleusercontent.com"
-                      data-callback="handleCredentialResponse"
-                      data-auto_prompt="false"
-                      data-ux_mode="popup"
-                      className="w-full flex justify-center"
-                    >
-                      <div
-                        className="g_id_signin"
-                        data-type="standard"
-                        data-size="large"
-                        data-theme="outline"
-                        data-text="signin_with"
-                        data-shape="rectangular"
-                        data-logo_alignment="left"
-                      ></div>
-                    </div>
-                  </div>
+                  <LoginForm
+                    loginData={loginData}
+                    handleLoginChange={handleLoginChange}
+                    handleLogin={handleLogin}
+                    isLoading={isLoading}
+                    showPassword={showPassword}
+                    togglePassword={() => setShowPassword(!showPassword)}
+                    setErrorMessage={(msg) => setNotification({ message: msg, type: 'error' })}
+                  />
                 ) : (
-                  <div className="space-y-3 sm:space-y-4">
-                    <form onSubmit={handleRegisterSubmit} className="space-y-3 sm:space-y-4 max-h-80 sm:max-h-96 overflow-y-auto scrollbar-hide">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div>
-                          <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">First Name</label>
-                          <input
-                            type="text"
-                            name="firstName"
-                            value={registerData.firstName}
-                            onChange={handleRegisterChange}
-                            className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Last Name</label>
-                          <input
-                            type="text"
-                            name="lastName"
-                            value={registerData.lastName}
-                            onChange={handleRegisterChange}
-                            className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Email</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={registerData.email}
-                          onChange={handleRegisterChange}
-                          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md text-sm sm:text-base"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Phone Number</label>
-                        <div className="flex">
-                          <div className="flex items-center bg-gray-50 border border-teal-500 rounded-l-md px-3">
-                            <img
-                              src="https://flagcdn.com/w20/in.png"
-                              alt="India"
-                              className="w-5 h-3 mr-2"
-                            />
-                            <span className="text-gray-700 font-medium">+91</span>
-                          </div>
-                          <input
-                            type="tel"
-                            name="phone"
-                            value={registerData.phone}
-                            onChange={handleRegisterChange}
-                            className="flex-1 p-2 sm:p-3 border border-l-0 border-teal-500 rounded-r-md text-sm sm:text-base"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div className="relative">
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Password</label>
-                        <input
-                          type={showRegisterPassword ? 'text' : 'password'}
-                          name="password"
-                          value={registerData.password}
-                          onChange={handleRegisterChange}
-                          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
-                          required
-                          minLength="6"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
-                          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
-                        >
-                          {showRegisterPassword ? (
-                            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
-                          ) : (
-                            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <label className="block text-gray-700 mb-1 sm:mb-2 text-sm sm:text-base">Confirm Password</label>
-                        <input
-                          type={showRegisterPassword ? 'text' : 'password'}
-                          name="confirmPassword"
-                          value={registerData.confirmPassword}
-                          onChange={handleRegisterChange}
-                          className="w-full p-2 sm:p-3 border border-teal-500 rounded-md pr-8 sm:pr-10 text-sm sm:text-base"
-                          required
-                          minLength="6"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
-                          className="absolute right-2 sm:right-3 top-9 sm:top-11 text-gray-600 hover:text-gray-800"
-                        >
-                          {showRegisterPassword ? (
-                            <AiOutlineEyeInvisible className="w-4 h-4 sm:w-5 sm:h-5" />
-                          ) : (
-                            <AiOutlineEye className="w-4 h-4 sm:w-5 sm:h-5" />
-                          )}
-                        </button>
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className={`w-full py-2 px-4 sm:py-3 sm:px-6 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm sm:text-base ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {isLoading ? 'Registering...' : 'Create Account'}
-                      </button>
-                    </form>
-                    <div
-                      id="g_id_onload"
-                      data-client_id="985947726470-5lflb818ib5ee246iucdbkpru7m5i1c8.apps.googleusercontent.com"
-                      data-callback="handleCredentialResponse"
-                      data-auto_prompt="false"
-                      data-ux_mode="popup"
-                      className="w-full flex justify-center"
-                    >
-                      <div
-                        className="g_id_signin"
-                        data-type="standard"
-                        data-size="large"
-                        data-theme="outline"
-                        data-text="signup_with"
-                        data-shape="rectangular"
-                        data-logo_alignment="left"
-                      ></div>
-                    </div>
-                  </div>
+                  <RegisterForm
+                    registerData={registerData}
+                    handleRegisterChange={handleRegisterChange}
+                    handleRegisterSubmit={handleRegisterSubmit}
+                    isLoading={isLoading}
+                    showPassword={showPassword}
+                    togglePassword={() => setShowPassword(!showPassword)}
+                  />
                 )}
               </div>
-
               <div className="mt-8 text-center">
                 <p className="text-xs text-gray-500">
                   By signing up, you agree to our Terms of Service and Privacy Policy
@@ -665,7 +744,7 @@ const SignUpPopup = () => {
             </div>
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 };
